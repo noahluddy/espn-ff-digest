@@ -297,7 +297,7 @@ tbody tr:hover { background:rgba(255,255,255,.03); }
 """
 
 
-def render_html(grouped: Dict[str, List[Dict[str, Any]]], window_desc: str) -> str:
+def render_html(grouped: Dict[str, List[Dict[str, Any]]], window_desc: str, league_name: str) -> str:
     # Get all combined actions and sort by time
     all_actions = grouped.get("Combined", [])
     all_actions.sort(key=lambda d: d["when_utc"])
@@ -318,15 +318,16 @@ def render_html(grouped: Dict[str, List[Dict[str, Any]]], window_desc: str) -> s
         sections.append(render_combined_table(all_actions))
     
     now = datetime.now().astimezone(CENTRAL_TIME).strftime("%Y-%m-%d %I:%M %p %Z")
+    page_title = f"Activity for ESPN Fantasy Football League: {league_name}"
     return f"""<!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>ESPN League Activity {window_desc}</title>
+<title>{page_title} {window_desc}</title>
 <style>{CSS}</style>
 </head>
 <body>
 <header>
-  <h1>ESPN League Activity</h1>
+  <h1>{page_title}</h1>
   <h2>{window_desc} • Generated {now}</h2>
 </header>
 <div class="container">
@@ -402,7 +403,7 @@ def main():
 
     central_now = datetime.now().astimezone(CENTRAL_TIME)
     window_desc = f"(last {lookback_hours}h ending {central_now.strftime('%Y-%m-%d %I:%M %p %Z')})"
-    html = render_html(grouped, window_desc)
+    html = render_html(grouped, window_desc, lg.settings.name)
     out = write_html_file(html, auto_open=True)
     print(f"Wrote: {out}")
 
