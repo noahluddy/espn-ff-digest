@@ -1,3 +1,10 @@
+"""
+ESPN Fantasy Football League Activity Digest
+
+This script fetches recent activity from an ESPN Fantasy Football league
+and generates an HTML report showing trades, adds, drops, and other transactions.
+"""
+
 import os
 import re
 import pathlib
@@ -17,12 +24,14 @@ CENTRAL_TIME = tz.gettz("America/Chicago")
 
 # ---------- utils ----------
 def get_env(name: str, required: bool = True, default: Union[str, None] = None) -> str:
+    """Get environment variable with optional validation."""
     val = os.environ.get(name, default)
     if required and (val is None or val == ""):
         raise RuntimeError(f"Missing required env var: {name}")
     return val
 
 def league_handle() -> League:
+    """Create and return a League instance using environment variables."""
     return League(
         league_id=int(get_env("LEAGUE_ID")),
         year=int(get_env("YEAR")),
@@ -48,31 +57,35 @@ def normalize_action_tuple(t: Any) -> Tuple[Any, str, Any, Any]:
 def classify_action(action_text: str) -> str:
     """Classify ESPN action text into categories."""
     a = action_text.lower()
-    
+
     # Check for trades first (most specific)
     if "trade" in a or "traded" in a:
         return "Trades"
-    
+
     # Check for drops
     if "drop" in a or "dropped" in a:
         return "Drops"
-    
+
     # Check for adds (including waiver adds)
     if "add" in a:
         return "Adds"
-    
+
     # Check for other specific actions
     if "waiver" in a or "claim" in a:
         return "Waivers"
     if "move" in a or "activated" in a or "reserve" in a:
         return "Roster Moves"
-    
+
     return "Other"
 
 def fmt_team(team_obj: Any) -> str:
-    return getattr(team_obj, "team_name", None) or getattr(team_obj, "team_abbrev", None) or str(team_obj)
+    """Format team object to string, trying team_name, team_abbrev, then str()."""
+    return (getattr(team_obj, "team_name", None) or
+            getattr(team_obj, "team_abbrev", None) or
+            str(team_obj))
 
 def fmt_player(player_obj: Any) -> str:
+    """Format player object to string with position and team info."""
     if hasattr(player_obj, "name"):
         name = player_obj.name
         # Don't add position/proTeam info if name already includes "D/ST"
@@ -91,6 +104,7 @@ def strip_html_tags(text: str) -> str:
     return re.sub(r"<[^>]+>", "", text)
 
 def fmt_local(dt_utc: datetime) -> str:
+    """Format UTC datetime to local time string."""
     return dt_utc.astimezone(CENTRAL_TIME).strftime("%Y-%m-%d %I:%M %p")
 
 def format_individual_action(item: Dict[str, Any]) -> str:
@@ -98,21 +112,19 @@ def format_individual_action(item: Dict[str, Any]) -> str:
     if item["action_type"] == "Adds":
         if "waiver added" in item["action"].lower():
             return f"Claimed <strong>{item['player']}</strong> for ${item['bid']}"
-        else:
-            return f"Added <strong>{item['player']}</strong>"
-    elif item["action_type"] == "Drops":
+        return f"Added <strong>{item['player']}</strong>"
+    if item["action_type"] == "Drops":
         return f"Dropped <strong>{item['player']}</strong>"
-    else:
-        # Check if it's a waiver claim that wasn't classified as "Adds"
-        if "waiver added" in item["action"].lower():
-            return f"Claimed <strong>{item['player']}</strong> for ${item['bid']}"
-        else:
-            return item["action"]
+    # Check if it's a waiver claim that wasn't classified as "Adds"
+    if "waiver added" in item["action"].lower():
+        return f"Claimed <strong>{item['player']}</strong> for ${item['bid']}"
+    return item["action"]
 
 # ---------- fetch ----------
 def get_activity_since(league: League, since_utc: datetime) -> Dict[str, List[Dict[str, Any]]]:
+    """Fetch and process league activity since the given UTC datetime."""
     grouped: DefaultDict[str, List[Dict[str, Any]]] = defaultdict(list)
-    
+
     # Fetch recent activity (optionally dump raw output when DEBUG_ACTIVITY is set truthy)
     raw_activity = league.recent_activity(size=300)
     if os.environ.get("DEBUG_ACTIVITY", "").lower() in {"1", "true", "yes", "on"}:
@@ -128,27 +140,27 @@ def get_activity_since(league: League, since_utc: datetime) -> Dict[str, List[Di
                 f.write(f"  Object dir: {dir(act)}\n")
                 f.write("-" * 80 + "\n")
         print(f"Debug: Raw ESPN API output saved to {debug_file}")
-    
+
     # Process activities and handle related transactions within the same activity
     for act in raw_activity:
         ts_utc = datetime.fromtimestamp(act.date / 1000, tz=timezone.utc)
         if ts_utc < since_utc:
             continue
-        
+
         actions = getattr(act, "actions", []) or []
         if not actions:
             continue
-            
+
         # Categorize actions within this activity
         adds = []
         drops = []
         trades = []
         other_actions = []
-        
+
         for tup in actions:
             team_obj, action_text, player_obj, bid = normalize_action_tuple(tup)
             action_type = classify_action(action_text)
-            
+
             activity_item = {
                 "when_utc": ts_utc,
                 "team": fmt_team(team_obj),
@@ -157,7 +169,7 @@ def get_activity_since(league: League, since_utc: datetime) -> Dict[str, List[Di
                 "bid": bid or 0,
                 "action_type": action_type,
             }
-            
+
             # Categorize the action
             if action_type == "Adds":
                 adds.append(activity_item)
@@ -167,7 +179,7 @@ def get_activity_since(league: League, since_utc: datetime) -> Dict[str, List[Di
                 trades.append(activity_item)
             else:
                 other_actions.append(activity_item)
-        
+
         # Process transactions based on type
         if adds and drops:
             # Handle add/drop combinations
@@ -175,44 +187,49 @@ def get_activity_since(league: League, since_utc: datetime) -> Dict[str, List[Di
             paired_items = []
             remaining_adds = adds.copy()
             remaining_drops = drops.copy()
-            
+
             # First, try to pair drops with adds (in case drops come first)
             for drop_item in drops:
                 for add_item in adds:
-                    if (drop_item not in [p[0] for p in paired_items] and 
-                        add_item not in [p[1] for p in paired_items]):
+                    if (drop_item not in [p[0] for p in paired_items] and
+                            add_item not in [p[1] for p in paired_items]):
                         paired_items.append((drop_item, add_item))
                         remaining_adds.remove(add_item)
                         remaining_drops.remove(drop_item)
                         break
-            
+
             # Process paired items
             for drop_item, add_item in paired_items:
                 # Check if this is a waiver claim
                 is_waiver_claim = "waiver" in add_item["action"].lower()
-                
+
                 if is_waiver_claim:
                     # Format as "Dropped X to claim Y for $Z"
+                    player_text = (f"Dropped <strong>{drop_item['player']}</strong> "
+                                  f"to claim <strong>{add_item['player']}</strong> "
+                                  f"for ${add_item['bid']}")
                     combined = {
                         "when_utc": ts_utc,
                         "team": add_item["team"],
-                        "player": f"Dropped <strong>{drop_item['player']}</strong> to claim <strong>{add_item['player']}</strong> for ${add_item['bid']}",
-                        "action": f"Dropped <strong>{drop_item['player']}</strong> to claim <strong>{add_item['player']}</strong> for ${add_item['bid']}",
+                        "player": player_text,
+                        "action": player_text,
                         "bid": add_item["bid"],
                         "action_type": "Combined",
                     }
                 else:
                     # Format as regular add/drop
+                    player_text = (f"Dropped <strong>{drop_item['player']}</strong> "
+                                  f"for <strong>{add_item['player']}</strong>")
                     combined = {
                         "when_utc": ts_utc,
                         "team": add_item["team"],
-                        "player": f"Dropped <strong>{drop_item['player']}</strong> for <strong>{add_item['player']}</strong>",
-                        "action": f"Dropped <strong>{drop_item['player']}</strong> for <strong>{add_item['player']}</strong>",
+                        "player": player_text,
+                        "action": player_text,
                         "bid": max(add_item["bid"], drop_item["bid"]),
                         "action_type": "Combined",
                     }
                 grouped["Combined"].append(combined)
-            
+
             # Handle any remaining unpaired items as individual actions
             for item in remaining_adds + remaining_drops:
                 formatted_action = format_individual_action(item)
@@ -240,11 +257,13 @@ def get_activity_since(league: League, since_utc: datetime) -> Dict[str, List[Di
             else:
                 # Multi-player trade
                 trade_players = [f"<strong>{t['player']}</strong>" for t in trades]
+                trade_text = (f"Traded {trade_players[0]} for "
+                             f"{', '.join(trade_players[1:])}")
                 combined = {
                     "when_utc": ts_utc,
                     "team": trades[0]["team"],
-                    "player": f"Traded {trade_players[0]} for {', '.join(trade_players[1:])}",
-                    "action": f"Traded {trade_players[0]} for {', '.join(trade_players[1:])}",
+                    "player": trade_text,
+                    "action": trade_text,
                     "bid": max(t["bid"] for t in trades),
                     "action_type": "Combined",
                 }
@@ -262,7 +281,7 @@ def get_activity_since(league: League, since_utc: datetime) -> Dict[str, List[Di
                     "action_type": "Combined",
                 }
                 grouped["Combined"].append(combined_item)
-    
+
     for cat in grouped:
         grouped[cat].sort(key=lambda d: (d["when_utc"], d["team"], d["player"]))
     return grouped
@@ -297,26 +316,28 @@ tbody tr:hover { background:rgba(255,255,255,.03); }
 """
 
 
-def render_html(grouped: Dict[str, List[Dict[str, Any]]], window_desc: str, league_name: str) -> str:
+def render_html(grouped: Dict[str, List[Dict[str, Any]]], window_desc: str,
+                league_name: str) -> str:
+    """Generate HTML report from grouped activity data."""
     # Get all combined actions and sort by time
     all_actions = grouped.get("Combined", [])
     all_actions.sort(key=lambda d: d["when_utc"])
-    
+
     # Get dropped players for the separate table
     dropped_players = [action for action in all_actions if "Dropped" in action["player"]]
-    
+
     sections = []
-    
+
     # Add Players Dropped table if there are any
     if dropped_players:
         sections.append(render_dropped_players_table(dropped_players))
-    
+
     # Add All Activity table
     if not all_actions:
         sections.append(f"<div class='card empty'>No activity {window_desc}.</div>")
     else:
         sections.append(render_combined_table(all_actions))
-    
+
     now = datetime.now().astimezone(CENTRAL_TIME).strftime("%Y-%m-%d %I:%M %p %Z")
     page_title = f"Activity for ESPN Fantasy Football League: {league_name}"
     return f"""<!doctype html>
@@ -340,19 +361,22 @@ def render_dropped_players_table(items: List[Dict[str, Any]]) -> str:
     rows = []
     for i in items:
         # Extract just the player name from the action text
-        # Handle "Dropped Player A", "Dropped Player A for Player B", and "Dropped Player A to claim Player B" formats
+        # Handle "Dropped Player A", "Dropped Player A for Player B",
+        # and "Dropped Player A to claim Player B" formats
         action_text = strip_html_tags(i['player'])
         if "Dropped" in action_text and ("for" in action_text or "to claim" in action_text):
-            # Extract the dropped player name (first player in "Dropped Player A for/to claim Player B")
-            dropped_player = action_text.split("Dropped ")[1].split(" for ")[0].split(" to claim ")[0]
+            # Extract the dropped player name (first player in
+            # "Dropped Player A for/to claim Player B")
+            dropped_player = (action_text.split("Dropped ")[1]
+                             .split(" for ")[0].split(" to claim ")[0])
         elif "Dropped" in action_text:
             # Extract the dropped player name (from "Dropped Player A")
             dropped_player = action_text.split("Dropped ")[1]
         else:
             dropped_player = action_text
-        
+
         rows.append(f"<tr><td>{dropped_player}</td></tr>")
-    
+
     rows_html = "".join(rows)
     return (
         f"<div class='section'>"
@@ -372,18 +396,20 @@ def render_combined_table(items: List[Dict[str, Any]]) -> str:
             f"<td>{i['player']}</td>"
             f"</tr>"
         )
-    
+
     rows_html = "".join(rows)
+    timezone_name = datetime.now().astimezone(CENTRAL_TIME).tzname()
     return (
         f"<div class='section'>"
         f"<h3>All Activity <span class='badge'>{len(items)}</span></h3>"
         f"<div class='card'><table>"
-        f"<thead><tr><th>When ({datetime.now().astimezone(CENTRAL_TIME).tzname()})</th><th>Team</th><th>Action</th></tr></thead>"
+        f"<thead><tr><th>When ({timezone_name})</th><th>Team</th><th>Action</th></tr></thead>"
         f"<tbody>{rows_html}</tbody></table></div></div>"
     )
 
 # ---------- write file ----------
 def write_html_file(html: str, auto_open: bool = True) -> str:
+    """Write HTML content to a file and optionally open it in browser."""
     reports_dir = pathlib.Path("reports")
     reports_dir.mkdir(parents=True, exist_ok=True)
     ts = datetime.now().astimezone(CENTRAL_TIME).strftime("%Y-%m-%d")
@@ -395,6 +421,7 @@ def write_html_file(html: str, auto_open: bool = True) -> str:
 
 # ---------- main ----------
 def main():
+    """Main function to generate and display league activity report."""
     lookback_hours = int(os.environ.get("LOOKBACK_HOURS", "24"))
     since_utc = datetime.now(timezone.utc) - timedelta(hours=lookback_hours)
 
