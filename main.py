@@ -212,7 +212,6 @@ def get_activity_since(league: League, since_utc: datetime) -> Dict[str, List[Di
                         "when_utc": ts_utc,
                         "team": add_item["team"],
                         "player": player_text,
-                        "action": player_text,
                         "bid": add_item["bid"],
                         "action_type": "Combined",
                     }
@@ -224,7 +223,6 @@ def get_activity_since(league: League, since_utc: datetime) -> Dict[str, List[Di
                         "when_utc": ts_utc,
                         "team": add_item["team"],
                         "player": player_text,
-                        "action": player_text,
                         "bid": max(add_item["bid"], drop_item["bid"]),
                         "action_type": "Combined",
                     }
@@ -237,7 +235,6 @@ def get_activity_since(league: League, since_utc: datetime) -> Dict[str, List[Di
                     "when_utc": item["when_utc"],
                     "team": item["team"],
                     "player": formatted_action,
-                    "action": formatted_action,
                     "bid": item["bid"],
                     "action_type": "Combined",
                 }
@@ -250,7 +247,6 @@ def get_activity_since(league: League, since_utc: datetime) -> Dict[str, List[Di
                     "when_utc": ts_utc,
                     "team": trade["team"],
                     "player": f"Traded <strong>{trade['player']}</strong>",
-                    "action": f"Traded <strong>{trade['player']}</strong>",
                     "bid": trade["bid"],
                     "action_type": "Combined",
                 }
@@ -263,7 +259,6 @@ def get_activity_since(league: League, since_utc: datetime) -> Dict[str, List[Di
                     "when_utc": ts_utc,
                     "team": trades[0]["team"],
                     "player": trade_text,
-                    "action": trade_text,
                     "bid": max(t["bid"] for t in trades),
                     "action_type": "Combined",
                 }
@@ -276,7 +271,6 @@ def get_activity_since(league: League, since_utc: datetime) -> Dict[str, List[Di
                     "when_utc": item["when_utc"],
                     "team": item["team"],
                     "player": formatted_action,
-                    "action": formatted_action,
                     "bid": item["bid"],
                     "action_type": "Combined",
                 }
