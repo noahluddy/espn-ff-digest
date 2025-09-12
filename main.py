@@ -369,7 +369,7 @@ def render_dropped_players_table(items: List[Dict[str, Any]]) -> str:
         else:
             dropped_player = action_text
 
-        rows.append(f"<tr><td>{dropped_player}</td></tr>")
+        rows.append(f"<tr><td><strong>{dropped_player}</strong></td></tr>")
 
     rows_html = "".join(rows)
     return (
