@@ -1,0 +1,12 @@
+# python
+__pycache__/
+*.pyc
+venv/
+.env
+
+# debug
+reports/
+debug_espn_raw.txt
+
+# mac
+.DS_Store
