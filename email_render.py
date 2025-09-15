@@ -31,7 +31,7 @@ def _get_email_styles() -> dict[str, str]:
         "pill": ("display:inline-block; font-size:11px; font-weight:600; color:#1e40af; "
                  "border:1px solid #93c5fd; background:#dbeafe; "
                  "border-radius:12px; padding:3px 10px; margin-left:8px;"),
-        "player_row": "padding:8px 0; border-bottom:1px solid #f3f4f6;",
+        "player_row": "display:flex; align-items:center; padding:8px 0; border-bottom:1px solid #f3f4f6;",
         "player_name": "font-weight:600; color:#1a1a1a; font-size:15px;",
         "player_details": "color:#6b7280; font-size:13px; margin-top:2px;",
         "headshot": "width:64px; height:48px; border-radius:50%; margin-right:12px; vertical-align:middle;",
