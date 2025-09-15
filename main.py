@@ -7,11 +7,12 @@ and generates an HTML report showing trades, adds, drops, and other transactions
 
 import os
 import re
-import pathlib
 import webbrowser
 from collections import defaultdict
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Tuple, DefaultDict, Union
+from pathlib import Path
+from typing import Any
 
 from dateutil import tz
 from dotenv import load_dotenv
@@ -24,34 +25,92 @@ load_dotenv()
 # Always display times in US Central Time (handles CST/CDT automatically)
 CENTRAL_TIME = tz.gettz("America/Chicago")
 
+@dataclass
+class PlayerInfo:
+    """Player information for activity tracking."""
+    player_id: int | None = None
+    position: str = ""
+    pro_team: str = ""
+    name: str = ""
+
+@dataclass
+class ActivityItem:
+    """Activity item for fantasy football transactions."""
+    when_utc: datetime
+    team: str
+    player: str
+    action: str
+    bid: int
+    action_type: str
+    player_id: int | None = None
+    position: str = ""
+    pro_team: str = ""
+    added_player: PlayerInfo | None = None
+    dropped_player: PlayerInfo | None = None
+
 # ---------- utils ----------
-def get_env(name: str, required: bool = True, default: Union[str, None] = None) -> str:
-    """Get environment variable with optional validation."""
+def get_env(name: str, required: bool = True, default: str | None = None) -> str:
+    """Get environment variable with optional validation.
+    
+    Args:
+        name: Environment variable name
+        required: Whether the variable is required
+        default: Default value if not found
+        
+    Returns:
+        Environment variable value
+        
+    Raises:
+        RuntimeError: If required variable is missing or empty
+    """
     val = os.environ.get(name, default)
-    if required and (val is None or val == ""):
+    if required and not val:
         raise RuntimeError(f"Missing required env var: {name}")
     return val
 
 def debug() -> bool:
-    """Check if DEBUG is enabled."""
+    """Check if DEBUG is enabled.
+    
+    Returns:
+        True if DEBUG environment variable is set to a truthy value
+    """
     debug_val = get_env("DEBUG", default="", required=False)
     return debug_val.lower() in {"1", "true", "yes", "on"}
 
 def league_handle() -> League:
-    """Create and return a League instance using environment variables."""
-    return League(
-        league_id=int(get_env("LEAGUE_ID")),
-        year=int(get_env("YEAR")),
-        swid=get_env("SWID"),
-        espn_s2=get_env("ESPN_S2"),
-    )
+    """Create and return a League instance using environment variables.
+    
+    Returns:
+        Configured League instance
+        
+    Raises:
+        RuntimeError: If required environment variables are missing
+        ValueError: If league_id or year cannot be converted to int
+    """
+    try:
+        return League(
+            league_id=int(get_env("LEAGUE_ID")),
+            year=int(get_env("YEAR")),
+            swid=get_env("SWID"),
+            espn_s2=get_env("ESPN_S2"),
+        )
+    except ValueError as e:
+        raise ValueError(f"Invalid league configuration: {e}") from e
 
-def normalize_action_tuple(t: Any) -> Tuple[Any, str, Any, Any]:
-    """ESPN actions are usually (team, action, player, bid). Be defensive."""
+def normalize_action_tuple(t: Any) -> tuple[Any, str, Any, Any]:
+    """Normalize ESPN action tuple to consistent format.
+    
+    Args:
+        t: Action data from ESPN API (list, tuple, dict, or other)
+        
+    Returns:
+        Tuple of (team, action, player, bid) with normalized action text
+    """
     if isinstance(t, (list, tuple)) and len(t) >= 3:
         team, action, player = t[0], t[1], t[2]
         bid = t[3] if len(t) >= 4 else None
         return team, str(action).lower(), player, bid
+    
     if isinstance(t, dict):
         return (
             t.get("team"),
@@ -59,31 +118,34 @@ def normalize_action_tuple(t: Any) -> Tuple[Any, str, Any, Any]:
             t.get("player"),
             t.get("bid") or t.get("amount"),
         )
+    
     return None, str(t).lower(), t, None
 
 def classify_action(action_text: str) -> str:
-    """Classify ESPN action text into categories."""
-    a = action_text.lower()
+    """Classify ESPN action text into categories.
+    
+    Args:
+        action_text: Raw action text from ESPN API
+        
+    Returns:
+        Category string: "Trades", "Drops", "Adds", "Waivers", "Roster Moves", or "Other"
+    """
+    action_lower = action_text.lower()
 
-    # Check for trades first (most specific)
-    if "trade" in a or "traded" in a:
-        return "Trades"
-
-    # Check for drops
-    if "drop" in a or "dropped" in a:
-        return "Drops"
-
-    # Check for adds (including waiver adds)
-    if "add" in a:
-        return "Adds"
-
-    # Check for other specific actions
-    if "waiver" in a or "claim" in a:
-        return "Waivers"
-    if "move" in a or "activated" in a or "reserve" in a:
-        return "Roster Moves"
-
-    return "Other"
+    # Use match statement for cleaner pattern matching
+    match action_lower:
+        case action if "trade" in action or "traded" in action:
+            return "Trades"
+        case action if "drop" in action or "dropped" in action:
+            return "Drops"
+        case action if "add" in action:
+            return "Adds"
+        case action if "waiver" in action or "claim" in action:
+            return "Waivers"
+        case action if any(word in action for word in ("move", "activated", "reserve")):
+            return "Roster Moves"
+        case _:
+            return "Other"
 
 def fmt_team(team_obj: Any) -> str:
     """Format team object to string, trying team_name, team_abbrev, then str()."""
@@ -114,22 +176,29 @@ def fmt_local(dt_utc: datetime) -> str:
     """Format UTC datetime to local time string."""
     return dt_utc.astimezone(CENTRAL_TIME).strftime("%Y-%m-%d %I:%M %p")
 
-def format_individual_action(item: Dict[str, Any]) -> str:
+def format_individual_action(item: dict[str, Any]) -> str:
     """Format individual action text with proper styling."""
-    if item["action_type"] == "Adds":
-        if "waiver added" in item["action"].lower():
-            return f"Claimed <strong>{item['player']}</strong> for ${item['bid']}"
-        return f"Added <strong>{item['player']}</strong>"
-    if item["action_type"] == "Drops":
-        return f"Dropped <strong>{item['player']}</strong>"
-    # Check if it's a waiver claim that wasn't classified as "Adds"
-    if "waiver added" in item["action"].lower():
-        return f"Claimed <strong>{item['player']}</strong> for ${item['bid']}"
-    return item["action"]
+    action_type = item["action_type"]
+    action_text = item["action"].lower()
+    player = item["player"]
+    bid = item["bid"]
+    
+    match action_type:
+        case "Adds":
+            if "waiver added" in action_text:
+                return f"Claimed <strong>{player}</strong> for ${bid}"
+            return f"Added <strong>{player}</strong>"
+        case "Drops":
+            return f"Dropped <strong>{player}</strong>"
+        case _:
+            # Check if it's a waiver claim that wasn't classified as "Adds"
+            if "waiver added" in action_text:
+                return f"Claimed <strong>{player}</strong> for ${bid}"
+            return item["action"]
 
 # ---------- fetch ----------
-def _process_activity_actions(actions: List[Any],
-                             ts_utc: datetime) -> Dict[str, List[Dict[str, Any]]]:
+def _process_activity_actions(actions: list[Any],
+                             ts_utc: datetime) -> dict[str, list[dict[str, Any]]]:
     """Process actions within a single activity and categorize them.
 
     Args:
@@ -183,9 +252,9 @@ def _process_activity_actions(actions: List[Any],
     }
 
 
-def _process_add_drop_combinations(adds: List[Dict[str, Any]],
-                                  drops: List[Dict[str, Any]],
-                                  ts_utc: datetime) -> List[Dict[str, Any]]:
+def _process_add_drop_combinations(adds: list[dict[str, Any]],
+                                  drops: list[dict[str, Any]],
+                                  ts_utc: datetime) -> list[dict[str, Any]]:
     """Process add/drop combinations and return combined items.
 
     Args:
@@ -275,7 +344,7 @@ def _process_add_drop_combinations(adds: List[Dict[str, Any]],
     return combined_items
 
 
-def _process_trades(trades: List[Dict[str, Any]], ts_utc: datetime) -> Dict[str, Any]:
+def _process_trades(trades: list[dict[str, Any]], ts_utc: datetime) -> dict[str, Any]:
     """Process trade actions and return combined trade item.
 
     Args:
@@ -332,7 +401,7 @@ def _process_trades(trades: List[Dict[str, Any]], ts_utc: datetime) -> Dict[str,
     }
 
 
-def _process_single_activity(act: Any, since_utc: datetime) -> List[Dict[str, Any]]:
+def _process_single_activity(act: Any, since_utc: datetime) -> list[dict[str, Any]]:
     """Process a single activity and return combined items.
 
     Args:
@@ -393,9 +462,9 @@ def _process_single_activity(act: Any, since_utc: datetime) -> List[Dict[str, An
     return combined_items
 
 
-def get_activity_since(league: League, since_utc: datetime) -> Dict[str, List[Dict[str, Any]]]:
+def get_activity_since(league: League, since_utc: datetime) -> dict[str, list[dict[str, Any]]]:
     """Fetch and process league activity since the given UTC datetime."""
-    grouped: DefaultDict[str, List[Dict[str, Any]]] = defaultdict(list)
+    grouped: defaultdict[str, list[dict[str, Any]]] = defaultdict(list)
 
     # Fetch recent activity (optionally dump raw output when DEBUG is set truthy)
     raw_activity = league.recent_activity(size=300)
@@ -404,17 +473,17 @@ def get_activity_since(league: League, since_utc: datetime) -> Dict[str, List[Di
 
     # Process activities
     for act in raw_activity:
-        combined_items = _process_single_activity(act, since_utc)
-        grouped["Combined"].extend(combined_items)
+        if combined_items := _process_single_activity(act, since_utc):
+            grouped["Combined"].extend(combined_items)
 
     for cat in grouped:
         grouped[cat].sort(key=lambda d: (d["when_utc"], d["team"], d["player"]))
     return grouped
 
 
-def _debug_dump_activity(raw_activity: List[Any]) -> None:
+def _debug_dump_activity(raw_activity: list[Any]) -> None:
     """Dump raw activity data to debug file when DEBUG is enabled."""
-    debug_file = pathlib.Path("debug_espn_raw.txt")
+    debug_file = Path("debug_espn_raw.txt")
     with open(debug_file, "w", encoding="utf-8") as f:
         f.write(f"Raw ESPN API output (size={len(raw_activity)}):\n\n")
         for i, act in enumerate(raw_activity):
@@ -430,7 +499,7 @@ def _debug_dump_activity(raw_activity: List[Any]) -> None:
 # ---------- write file ----------
 def write_html_file(html: str, auto_open: bool = True) -> str:
     """Write HTML content to a file and optionally open it in browser."""
-    reports_dir = pathlib.Path("reports")
+    reports_dir = Path("reports")
     reports_dir.mkdir(parents=True, exist_ok=True)
     ts = datetime.now().astimezone(CENTRAL_TIME).strftime("%Y-%m-%d")
     path = reports_dir / f"activity-{ts}.html"

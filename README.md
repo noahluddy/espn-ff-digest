@@ -3,7 +3,7 @@
 Generate a clean HTML digest of recent ESPN Fantasy Football league activity, with drops listed first. Outputs go to `reports/` and open in your default browser.
 
 ### Requirements
-- Python 3.9+
+- Python 3.13+
 - An ESPN Fantasy Football league
 
 ### Quick start
@@ -161,20 +161,3 @@ Handy commands:
 - Dependencies are pinned for macOS compatibility (`urllib3<2`) to avoid LibreSSL warnings.
 - Generated outputs (`reports/`) and debug logs (`debug_espn_raw.txt`) are ignored by Git via `.gitignore`.
 - All credentials are read from environment variables; nothing sensitive is committed to the repo.
-
-### Optional: pre-commit hook
-To prevent committing generated reports and debug logs, you can add a simple Git hook:
-```bash
-cat > .git/hooks/pre-commit <<'SH'
-#!/bin/sh
-blocked=$(git diff --cached --name-only | grep -E '^(reports/.*\.html|debug_.*\.txt)$')
-if [ -n "$blocked" ]; then
-  echo "Blocked generated files in commit:" >&2
-  echo "$blocked" >&2
-  exit 1
-fi
-SH
-chmod +x .git/hooks/pre-commit
-```
-
-

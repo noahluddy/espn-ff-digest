@@ -6,10 +6,14 @@ league activity reports.
 
 import re
 from datetime import datetime
-from typing import Dict, List, Any, Optional
+from typing import Any
 
-def _get_email_styles():
-    """Get CSS styles for email rendering - enhanced and email-safe."""
+def _get_email_styles() -> dict[str, str]:
+    """Get CSS styles for email rendering - enhanced and email-safe.
+    
+    Returns:
+        Dictionary mapping style names to CSS strings
+    """
     base = "font-family:Arial,Helvetica,sans-serif; color:#1a1a1a; line-height:1.5;"
     return {
         "h1": "margin:0 0 8px; font-size:24px; font-weight:bold; color:#1a1a1a; " + base,
@@ -39,13 +43,26 @@ def _get_email_styles():
 
 
 def get_player_headshot_url(player_id: int) -> str:
-    """Get ESPN headshot URL for a player."""
+    """Get ESPN headshot URL for a player.
+    
+    Args:
+        player_id: ESPN player ID
+        
+    Returns:
+        URL string for player headshot image
+    """
     return f"https://a.espncdn.com/i/headshots/nfl/players/full/{player_id}.png"
 
 
 def get_team_logo_url(team_abbrev: str) -> str:
-    """Get ESPN team logo URL for D/ST teams."""
-    # ESPN team logo format
+    """Get ESPN team logo URL for D/ST teams.
+    
+    Args:
+        team_abbrev: Team abbreviation (e.g., "KC", "NE")
+        
+    Returns:
+        URL string for team logo image
+    """
     return f"https://a.espncdn.com/i/teamlogos/nfl/500/{team_abbrev.lower()}.png"
 
 
@@ -54,7 +71,7 @@ def is_dst_player(player_name: str) -> bool:
     return "D/ST" in player_name or "DST" in player_name
 
 
-def extract_player_info_from_action(action_text: str) -> tuple[str, Optional[int]]:
+def extract_player_info_from_action(action_text: str) -> tuple[str, int | None]:
     """Extract player name and ID from action text.
     
     Returns:
@@ -66,7 +83,7 @@ def extract_player_info_from_action(action_text: str) -> tuple[str, Optional[int
     return player_name, None
 
 
-def format_player_with_headshot(player_name: str, player_id: Optional[int] = None, 
+def format_player_with_headshot(player_name: str, player_id: int | None = None, 
                                team_abbrev: str = "") -> str:
     """Format player with headshot image for email display (simplified - no redundant info)."""
     styles = _get_email_styles()
@@ -95,7 +112,7 @@ def format_player_with_headshot(player_name: str, player_id: Optional[int] = Non
                 f'</div>')
 
 
-def render_email_html(grouped: Dict[str, List[Dict[str, Any]]],
+def render_email_html(grouped: dict[str, list[dict[str, Any]]],
                      window_desc: str, league_title: str) -> str:
     """Render HTML email content for fantasy football league activity.
     

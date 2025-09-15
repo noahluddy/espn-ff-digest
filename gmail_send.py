@@ -7,7 +7,7 @@ football league activity reports.
 import os
 import base64
 import json
-from typing import List, Optional
+from typing import Any
 from email.mime.text import MIMEText
 
 from dotenv import load_dotenv
@@ -19,7 +19,7 @@ from googleapiclient.discovery import build
 SCOPES = ["https://www.googleapis.com/auth/gmail.send"]
 load_dotenv()  # pulls EMAIL_* from .env
 
-def _parse_list(env_value: Optional[str]) -> List[str]:
+def _parse_list(env_value: str | None) -> list[str]:
     """Parse comma or semicolon separated email addresses from environment variable.
     
     Args:
@@ -38,6 +38,9 @@ def _get_service():
     
     Returns:
         Gmail service instance for sending emails
+        
+    Raises:
+        ValueError: If token is missing or invalid
     """
     # Read token from environment variable (base64 encoded)
     token_b64 = os.environ.get("GMAIL_TOKEN_B64")
@@ -49,7 +52,7 @@ def _get_service():
     try:
         token_data = json.loads(base64.b64decode(token_b64.strip()).decode('utf-8'))
     except (base64.binascii.Error, json.JSONDecodeError, UnicodeDecodeError) as e:
-        raise ValueError(f"Failed to decode base64 token: {e}")
+        raise ValueError(f"Failed to decode base64 token: {e}") from e
     
     # Create credentials object from token data
     creds = Credentials.from_authorized_user_info(token_data, SCOPES)
@@ -71,16 +74,17 @@ def send_gmail_html(subject: str, html: str) -> None:
     Args:
         subject: Email subject line
         html: HTML content of the email
+        
+    Raises:
+        ValueError: If no recipients are specified or service fails
     """
     from_addr = os.environ.get("EMAIL_FROM")
     to_list = _parse_list(os.environ.get("EMAIL_TO"))
-    cc_list = _parse_list(os.environ.get("EMAIL_CC"))
-    bcc_list = _parse_list(os.environ.get("EMAIL_BCC"))
+    cc_list = _parse_list(os.environ.get("EMAIL_CC")) or []
+    bcc_list = _parse_list(os.environ.get("EMAIL_BCC")) or []
 
-    if not to_list and not (bcc_list or []):
+    if not to_list and not bcc_list:
         raise ValueError("Need at least one recipient in TO or BCC.")
-    cc_list = cc_list or []
-    bcc_list = bcc_list or []
 
     msg = MIMEText(html, "html")
     if to_list:
