@@ -30,8 +30,8 @@ def _get_email_styles():
         "player_row": "padding:8px 0; border-bottom:1px solid #f3f4f6;",
         "player_name": "font-weight:600; color:#1a1a1a; font-size:15px;",
         "player_details": "color:#6b7280; font-size:13px; margin-top:2px;",
-        "headshot": "width:50px; height:40px; border-radius:50%; margin-right:12px; vertical-align:middle;",
-        "team_logo": "width:40px; height:40px; border-radius:50%; margin-right:12px; vertical-align:middle;",
+        "headshot": "width:64px; height:48px; border-radius:50%; margin-right:12px; vertical-align:middle;",
+        "team_logo": "width:48px; height:48px; border-radius:50%; margin-right:12px; vertical-align:middle;",
         "action_text": "color:#1a1a1a; font-size:14px;",
         "team_name": "font-weight:600; color:#374151; font-size:14px;",
         "timestamp": "color:#6b7280; font-size:13px; font-family:monospace;"
