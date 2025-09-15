@@ -4,6 +4,12 @@ __pycache__/
 venv/
 .env
 
+# gmail
+credentials.json
+credentials.json.b64
+token.json
+token.json.b64
+
 # debug
 reports/
 debug_espn_raw.txt

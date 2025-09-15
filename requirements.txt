@@ -1,5 +1,11 @@
 espn-api>=0.45
+
 python-dateutil>=2.9
 python-dotenv>=1.0
+
 # https://github.com/urllib3/urllib3/issues/3020
 urllib3<2
+
+google-api-python-client>=2.137
+google-auth-httplib2>=0.2
+google-auth-oauthlib>=1.2
