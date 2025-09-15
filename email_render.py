@@ -6,27 +6,93 @@ league activity reports.
 
 import re
 from datetime import datetime
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional
 
 def _get_email_styles():
-    """Get CSS styles for email rendering."""
-    base = "font-family:Arial,Helvetica,sans-serif; color:#111; line-height:1.4;"
+    """Get CSS styles for email rendering - enhanced and email-safe."""
+    base = "font-family:Arial,Helvetica,sans-serif; color:#1a1a1a; line-height:1.5;"
     return {
-        "h1": "margin:0 0 6px; font-size:20px; " + base,
-        "h2": "margin:0 0 18px; font-size:13px; color:#555; " + base,
-        "h3": "margin:18px 0 8px; font-size:16px; color:#0B5FFF; " + base,
-        "card": ("border:1px solid #e5e7eb; border-radius:10px; padding:0; "
-                 "overflow:hidden;"),
-        "wrap": "max-width:760px; margin:0 auto; padding:16px;",
+        "h1": "margin:0 0 8px; font-size:24px; font-weight:bold; color:#1a1a1a; " + base,
+        "h2": "margin:0 0 24px; font-size:14px; color:#666; font-weight:normal; " + base,
+        "h3": "margin:24px 0 12px; font-size:18px; color:#1e40af; font-weight:600; " + base,
+        "card": ("border:1px solid #d1d5db; border-radius:12px; padding:0; "
+                 "overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,0.1); "
+                 "background:#ffffff;"),
+        "wrap": "max-width:800px; margin:0 auto; padding:20px; background:#f9fafb;",
         "tbl": "width:100%; border-collapse:collapse; " + base,
-        "th": ("text-align:left; font-size:13px; background:#f6f7fb; "
-               "border-bottom:1px solid #e5e7eb; padding:10px 12px;"),
-        "td": ("font-size:14px; border-bottom:1px solid #e5e7eb; "
-               "padding:10px 12px;"),
-        "pill": ("display:inline-block; font-size:12px; color:#0B5FFF; "
-                 "border:1px solid #bcd6ff; background:#eef5ff; "
-                 "border-radius:999px; padding:2px 8px; margin-left:6px;")
+        "th": ("text-align:left; font-size:13px; font-weight:600; background:#f8fafc; "
+               "border-bottom:2px solid #e5e7eb; padding:12px 16px; color:#374151;"),
+        "td": ("font-size:14px; border-bottom:1px solid #f3f4f6; "
+               "padding:12px 16px; vertical-align:top;"),
+        "pill": ("display:inline-block; font-size:11px; font-weight:600; color:#1e40af; "
+                 "border:1px solid #93c5fd; background:#dbeafe; "
+                 "border-radius:12px; padding:3px 10px; margin-left:8px;"),
+        "player_row": "padding:8px 0; border-bottom:1px solid #f3f4f6;",
+        "player_name": "font-weight:600; color:#1a1a1a; font-size:15px;",
+        "player_details": "color:#6b7280; font-size:13px; margin-top:2px;",
+        "headshot": "width:50px; height:40px; border-radius:50%; margin-right:12px; vertical-align:middle;",
+        "team_logo": "width:40px; height:40px; border-radius:50%; margin-right:12px; vertical-align:middle;",
+        "action_text": "color:#1a1a1a; font-size:14px;",
+        "team_name": "font-weight:600; color:#374151; font-size:14px;",
+        "timestamp": "color:#6b7280; font-size:13px; font-family:monospace;"
     }
+
+
+def get_player_headshot_url(player_id: int) -> str:
+    """Get ESPN headshot URL for a player."""
+    return f"https://a.espncdn.com/i/headshots/nfl/players/full/{player_id}.png"
+
+
+def get_team_logo_url(team_abbrev: str) -> str:
+    """Get ESPN team logo URL for D/ST teams."""
+    # ESPN team logo format
+    return f"https://a.espncdn.com/i/teamlogos/nfl/500/{team_abbrev.lower()}.png"
+
+
+def is_dst_player(player_name: str) -> bool:
+    """Check if this is a D/ST (Defense/Special Teams) player."""
+    return "D/ST" in player_name or "DST" in player_name
+
+
+def extract_player_info_from_action(action_text: str) -> tuple[str, Optional[int]]:
+    """Extract player name and ID from action text.
+    
+    Returns:
+        Tuple of (player_name, player_id) where player_id may be None
+    """
+    # This is a simplified extraction - in practice, you'd need to pass
+    # the actual player objects with IDs from the main processing
+    player_name = re.sub(r'<[^>]+>', '', action_text)  # Remove HTML tags
+    return player_name, None
+
+
+def format_player_with_headshot(player_name: str, player_id: Optional[int] = None, 
+                               team_abbrev: str = "") -> str:
+    """Format player with headshot image for email display (simplified - no redundant info)."""
+    styles = _get_email_styles()
+    
+    # Check if this is a D/ST team
+    if is_dst_player(player_name) and team_abbrev:
+        # Use team logo for D/ST (40x40 square)
+        logo_url = get_team_logo_url(team_abbrev)
+        return (f'<div style="{styles["player_row"]}">'
+                f'<img src="{logo_url}" alt="{player_name}" '
+                f'style="{styles["team_logo"]}" />'
+                f'<span style="{styles["player_name"]}">{player_name}</span>'
+                f'</div>')
+    elif player_id:
+        # Use player headshot for regular players (50x40 wider)
+        headshot_url = get_player_headshot_url(player_id)
+        return (f'<div style="{styles["player_row"]}">'
+                f'<img src="{headshot_url}" alt="{player_name}" '
+                f'style="{styles["headshot"]}" />'
+                f'<span style="{styles["player_name"]}">{player_name}</span>'
+                f'</div>')
+    else:
+        # No image available
+        return (f'<div style="{styles["player_row"]}">'
+                f'<span style="{styles["player_name"]}">{player_name}</span>'
+                f'</div>')
 
 
 def render_email_html(grouped: Dict[str, List[Dict[str, Any]]],
@@ -50,30 +116,38 @@ def render_email_html(grouped: Dict[str, List[Dict[str, Any]]],
         return re.sub(r"<[^>]+>", "", text)
 
     def render_dropped_players_table(items):
-        """Render a simple list showing only dropped player names."""
+        """Render a simple list showing only dropped player names with enhanced styling."""
         if not items:
             return ""
 
         rows = []
         for i in items:
-            # Extract just the player name from the action text
-            # Handle "Dropped Player A", "Dropped Player A for Player B",
-            # and "Dropped Player A to claim Player B" formats
-            action_text = strip_html_tags(i['player'])
-            if ("Dropped" in action_text and
-                    ("for" in action_text or "to claim" in action_text)):
-                # Extract the dropped player name (first player in
-                # "Dropped Player A for/to claim Player B")
-                dropped_player = (action_text.split("Dropped ")[1]
-                                 .split(" for ")[0].split(" to claim ")[0])
-            elif "Dropped" in action_text:
-                # Extract the dropped player name (from "Dropped Player A")
-                dropped_player = action_text.split("Dropped ")[1]
-            else:
-                dropped_player = action_text
+            # Extract dropped player information from the new data structure
+            dropped_player_info = i.get('dropped_player', {})
+            dropped_player_name = dropped_player_info.get('name', '')
+            dropped_player_id = dropped_player_info.get('player_id')
+            
+            # If no dropped player info in new structure, fall back to parsing action text
+            if not dropped_player_name:
+                action_text = strip_html_tags(i['player'])
+                if ("Dropped" in action_text and
+                        ("for" in action_text or "to claim" in action_text)):
+                    # Extract the dropped player name (first player in
+                    # "Dropped Player A for/to claim Player B")
+                    dropped_player_name = (action_text.split("Dropped ")[1]
+                                         .split(" for ")[0].split(" to claim ")[0])
+                elif "Dropped" in action_text:
+                    # Extract the dropped player name (from "Dropped Player A")
+                    dropped_player_name = action_text.split("Dropped ")[1]
+                else:
+                    dropped_player_name = action_text
 
-            rows.append(f'<tr><td style="{styles["td"]}">'
-                       f'<strong>{dropped_player}</strong></td></tr>')
+            # Get team abbreviation for D/ST teams
+            team_abbrev = dropped_player_info.get('pro_team', '')
+            
+            # Format player with headshot
+            player_html = format_player_with_headshot(dropped_player_name, dropped_player_id, team_abbrev)
+            rows.append(f'<tr><td style="{styles["td"]}">{player_html}</td></tr>')
 
         rows_html = "".join(rows)
         return (f'<h3 style="{styles["h3"]}">Dropped Players'
@@ -83,19 +157,20 @@ def render_email_html(grouped: Dict[str, List[Dict[str, Any]]],
                 f'<tbody>{rows_html}</tbody></table></div>')
 
     def render_all_activity_table(items):
-        """Render a single combined table with all actions sorted by time."""
+        """Render a single combined table with all actions sorted by time with enhanced styling."""
         if not items:
             return ""
 
         rows = []
         for i in items:
-            rows.append(
-                f'<tr>'
-                f'<td style="{styles["td"]}">{i["when_local"]}</td>'
-                f'<td style="{styles["td"]}">{i["team"]}</td>'
-                f'<td style="{styles["td"]}">{i["player"]}</td>'
-                f'</tr>'
-            )
+            # Enhanced row with better styling
+            timestamp_cell = f'<td style="{styles["td"]}; {styles["timestamp"]}">{i["when_local"]}</td>'
+            team_cell = f'<td style="{styles["td"]}; {styles["team_name"]}">{i["team"]}</td>'
+            
+            # Enhanced action cell with better formatting
+            action_cell = f'<td style="{styles["td"]}; {styles["action_text"]}">{i["player"]}</td>'
+            
+            rows.append(f'<tr>{timestamp_cell}{team_cell}{action_cell}</tr>')
 
         rows_html = "".join(rows)
         return (f'<h3 style="{styles["h3"]}">All Activity'

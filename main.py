@@ -148,6 +148,11 @@ def _process_activity_actions(actions: List[Any],
         team_obj, action_text, player_obj, bid = normalize_action_tuple(tup)
         action_type = classify_action(action_text)
 
+        # Extract player details for headshot support
+        player_id = getattr(player_obj, "playerId", None) if player_obj else None
+        player_position = getattr(player_obj, "position", "") if player_obj else ""
+        player_team = getattr(player_obj, "proTeam", "") if player_obj else ""
+        
         activity_item = {
             "when_utc": ts_utc,
             "team": fmt_team(team_obj),
@@ -155,6 +160,9 @@ def _process_activity_actions(actions: List[Any],
             "action": action_text,
             "bid": bid or 0,
             "action_type": action_type,
+            "player_id": player_id,
+            "position": player_position,
+            "pro_team": player_team,
         }
 
         # Categorize the action
@@ -221,18 +229,46 @@ def _process_add_drop_combinations(adds: List[Dict[str, Any]],
             "player": player_text,
             "bid": add_item["bid"] if is_waiver_claim else max(add_item["bid"], drop_item["bid"]),
             "action_type": "Combined",
+            # Store both players' information
+            "added_player": {
+                "player_id": add_item.get("player_id"),
+                "position": add_item.get("position", ""),
+                "pro_team": add_item.get("pro_team", ""),
+                "name": add_item.get("player", "").replace("<strong>", "").replace("</strong>", "")
+            },
+            "dropped_player": {
+                "player_id": drop_item.get("player_id"),
+                "position": drop_item.get("position", ""),
+                "pro_team": drop_item.get("pro_team", ""),
+                "name": drop_item.get("player", "").replace("<strong>", "").replace("</strong>", "")
+            }
         }
         combined_items.append(combined)
 
     # Handle remaining unpaired items
     for item in remaining_adds + remaining_drops:
         formatted_action = format_individual_action(item)
+        # For individual actions, determine if it's an add or drop
+        is_drop = "Dropped" in formatted_action or "drop" in item.get("action", "").lower()
+        
         combined_item = {
             "when_utc": item["when_utc"],
             "team": item["team"],
             "player": formatted_action,
             "bid": item["bid"],
             "action_type": "Combined",
+            "added_player": {
+                "player_id": item.get("player_id") if not is_drop else None,
+                "position": item.get("position", "") if not is_drop else "",
+                "pro_team": item.get("pro_team", "") if not is_drop else "",
+                "name": item.get("player", "").replace("<strong>", "").replace("</strong>", "") if not is_drop else ""
+            },
+            "dropped_player": {
+                "player_id": item.get("player_id") if is_drop else None,
+                "position": item.get("position", "") if is_drop else "",
+                "pro_team": item.get("pro_team", "") if is_drop else "",
+                "name": item.get("player", "").replace("<strong>", "").replace("</strong>", "") if is_drop else ""
+            }
         }
         combined_items.append(combined_item)
 
@@ -257,6 +293,18 @@ def _process_trades(trades: List[Dict[str, Any]], ts_utc: datetime) -> Dict[str,
             "player": f"Traded <strong>{trade['player']}</strong>",
             "bid": trade["bid"],
             "action_type": "Combined",
+            "added_player": {
+                "player_id": trade.get("player_id"),
+                "position": trade.get("position", ""),
+                "pro_team": trade.get("pro_team", ""),
+                "name": trade.get("player", "").replace("<strong>", "").replace("</strong>", "")
+            },
+            "dropped_player": {
+                "player_id": None,
+                "position": "",
+                "pro_team": "",
+                "name": ""
+            }
         }
 
     # Multi-player trade
@@ -269,6 +317,18 @@ def _process_trades(trades: List[Dict[str, Any]], ts_utc: datetime) -> Dict[str,
         "player": trade_text,
         "bid": max(t["bid"] for t in trades),
         "action_type": "Combined",
+        "added_player": {
+            "player_id": trades[0].get("player_id"),
+            "position": trades[0].get("position", ""),
+            "pro_team": trades[0].get("pro_team", ""),
+            "name": trades[0].get("player", "").replace("<strong>", "").replace("</strong>", "")
+        },
+        "dropped_player": {
+            "player_id": None,
+            "position": "",
+            "pro_team": "",
+            "name": ""
+        }
     }
 
 
@@ -307,12 +367,27 @@ def _process_single_activity(act: Any, since_utc: datetime) -> List[Dict[str, An
     combined_items = []
     for item in adds + drops + other_actions:
         formatted_action = format_individual_action(item)
+        # For individual actions, determine if it's an add or drop
+        is_drop = "Dropped" in formatted_action or "drop" in item.get("action", "").lower()
+        
         combined_item = {
             "when_utc": item["when_utc"],
             "team": item["team"],
             "player": formatted_action,
             "bid": item["bid"],
             "action_type": "Combined",
+            "added_player": {
+                "player_id": item.get("player_id") if not is_drop else None,
+                "position": item.get("position", "") if not is_drop else "",
+                "pro_team": item.get("pro_team", "") if not is_drop else "",
+                "name": item.get("player", "").replace("<strong>", "").replace("</strong>", "") if not is_drop else ""
+            },
+            "dropped_player": {
+                "player_id": item.get("player_id") if is_drop else None,
+                "position": item.get("position", "") if is_drop else "",
+                "pro_team": item.get("pro_team", "") if is_drop else "",
+                "name": item.get("player", "").replace("<strong>", "").replace("</strong>", "") if is_drop else ""
+            }
         }
         combined_items.append(combined_item)
     return combined_items
