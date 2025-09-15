@@ -31,11 +31,15 @@ def _get_email_styles() -> dict[str, str]:
         "pill": ("display:inline-block; font-size:11px; font-weight:600; color:#1e40af; "
                  "border:1px solid #93c5fd; background:#dbeafe; "
                  "border-radius:12px; padding:3px 10px; margin-left:8px;"),
-        "player_row": "display:flex; align-items:center; padding:8px 0; border-bottom:1px solid #f3f4f6;",
-        "player_name": "font-weight:600; color:#1a1a1a; font-size:15px;",
+        "player_row": "padding:8px 0; border-bottom:1px solid #f3f4f6;",
+        "player_name": "font-weight:600; color:#1a1a1a; font-size:15px; display:block; line-height:1.3; word-break:break-word;",
         "player_details": "color:#6b7280; font-size:13px; margin-top:2px;",
-        "headshot": "width:64px; height:48px; border-radius:50%; margin-right:12px; vertical-align:middle;",
-        "team_logo": "width:48px; height:48px; border-radius:50%; margin-right:12px; vertical-align:middle;",
+        "headshot": "display:block; width:64px; height:48px; border-radius:50%; vertical-align:middle;",
+        "team_logo": "display:block; width:48px; height:48px; border-radius:50%; vertical-align:middle; padding-right:9px;",
+        "media_tbl": "border-collapse:collapse; border-spacing:0; width:100%;",
+        "media_img_cell": "width:64px; padding:0 12px 0 0; vertical-align:middle;",
+        "media_img_cell_dst": "width:64px; padding:0 12px 0 7px; vertical-align:middle;",
+        "media_text_cell": "vertical-align:middle; width:100%;",
         "action_text": "color:#1a1a1a; font-size:14px;",
         "team_name": "font-weight:600; color:#374151; font-size:14px;",
         "timestamp": "color:#6b7280; font-size:13px; font-family:monospace;"
@@ -90,26 +94,52 @@ def format_player_with_headshot(player_name: str, player_id: int | None = None,
     
     # Check if this is a D/ST team
     if is_dst_player(player_name) and team_abbrev:
-        # Use team logo for D/ST (40x40 square)
+        # Use team logo for D/ST (square)
         logo_url = get_team_logo_url(team_abbrev)
-        return (f'<div style="{styles["player_row"]}">'
-                f'<img src="{logo_url}" alt="{player_name}" '
-                f'style="{styles["team_logo"]}" />'
-                f'<span style="{styles["player_name"]}">{player_name}</span>'
-                f'</div>')
+        return (
+            f'<div style="{styles["player_row"]}">'
+            f'<table role="presentation" style="{styles["media_tbl"]}" cellpadding="0" cellspacing="0">'
+            f'<tr>'
+            f'<td style="{styles["media_img_cell_dst"]}">'
+            f'<img src="{logo_url}" alt="{player_name}" style="{styles["team_logo"]}" />'
+            f'</td>'
+            f'<td style="{styles["media_text_cell"]}">'
+            f'<span style="{styles["player_name"]}">{player_name}</span>'
+            f'</td>'
+            f'</tr>'
+            f'</table>'
+            f'</div>'
+        )
     elif player_id:
-        # Use player headshot for regular players (50x40 wider)
+        # Use player headshot for regular players
         headshot_url = get_player_headshot_url(player_id)
-        return (f'<div style="{styles["player_row"]}">'
-                f'<img src="{headshot_url}" alt="{player_name}" '
-                f'style="{styles["headshot"]}" />'
-                f'<span style="{styles["player_name"]}">{player_name}</span>'
-                f'</div>')
+        return (
+            f'<div style="{styles["player_row"]}">'
+            f'<table role="presentation" style="{styles["media_tbl"]}" cellpadding="0" cellspacing="0">'
+            f'<tr>'
+            f'<td style="{styles["media_img_cell"]}">'
+            f'<img src="{headshot_url}" alt="{player_name}" style="{styles["headshot"]}" />'
+            f'</td>'
+            f'<td style="{styles["media_text_cell"]}">'
+            f'<span style="{styles["player_name"]}">{player_name}</span>'
+            f'</td>'
+            f'</tr>'
+            f'</table>'
+            f'</div>'
+        )
     else:
         # No image available
-        return (f'<div style="{styles["player_row"]}">'
-                f'<span style="{styles["player_name"]}">{player_name}</span>'
-                f'</div>')
+        return (
+            f'<div style="{styles["player_row"]}">'
+            f'<table role="presentation" style="{styles["media_tbl"]}" cellpadding="0" cellspacing="0">'
+            f'<tr>'
+            f'<td style="{styles["media_text_cell"]}">'
+            f'<span style="{styles["player_name"]}">{player_name}</span>'
+            f'</td>'
+            f'</tr>'
+            f'</table>'
+            f'</div>'
+        )
 
 
 def render_email_html(grouped: dict[str, list[dict[str, Any]]],
