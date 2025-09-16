@@ -1,12 +1,12 @@
-### ESPN Fantasy Foobtall Activity Digest
+### ESPN Fantasy Football Activity Digest
 
-Generate a clean HTML digest of recent ESPN Fantasy Football league activity, with drops listed first. The digest emailed via the Gmail API or, in DEBUG mode, go to `reports/` and open in your default browser.
+Generates a clean HTML digest of recent ESPN Fantasy Football league activity (drops listed first). Emails via Gmail API or saves locally in DEBUG mode.
 
 ### Requirements
 - Python 3.13+
 - An ESPN Fantasy Football league
 
-### Quick start
+### Quick Start
 ```bash
 # From the project root, create and activate an isolated virtual environment
 python3 -m venv venv
@@ -19,8 +19,8 @@ pip install -r requirements.txt
 cp .env.template .env
 ```
 
-### Configure environment
-Edit the `.env` file in the project root with the following variables:
+### Configuration
+Create a `.env` file in the project root with these variables:
 ```ini
 LEAGUE_ID=1234567          # Your league ID (integer)
 YEAR=2025                  # Season year (integer)
@@ -134,19 +134,19 @@ rm credentials.json token.json token.json.b64 generate_token.py
 - **Token Refresh**: The access token expires after ~1 hour, but the refresh token (also in `token.json`) allows automatic renewal. The Google Auth library handles this automatically - no manual intervention needed in GitHub Actions
 - **Long-term validity**: Refresh tokens can last months or years, so you won't need to regenerate the token frequently
 
-### Run
+### Usage
 ```bash
 python main.py
 ```
 
-To enable debug logging of raw ESPN API activity (file is gitignored):
+For debug mode with raw ESPN API logging:
 ```bash
 DEBUG=1 python main.py
 ```
 
-The script writes an HTML file like `reports/activity-YYYY-MM-DD.html` and opens it automatically.
+Outputs HTML to `reports/activity-YYYY-MM-DD.html` and opens automatically.
 
-### Why a virtual environment is recommended
+### Virtual Environment Benefits
 - Isolation: Keeps this project’s packages separate from system Python and other projects, avoiding version conflicts.
 - Reproducibility: Everyone uses the same dependency versions (e.g., `urllib3<2`), so behavior is consistent.
 - Safer installs: No `sudo`; you won’t modify system packages by accident.
@@ -157,7 +157,7 @@ Handy commands:
 - Deactivate: `deactivate`
 - Verify interpreter: `python -c 'import sys; print(sys.executable)'` (should show `.../venv/bin/python`)
 
-### Notes and troubleshooting
+### Notes & Troubleshooting
 - Dependencies are pinned for macOS compatibility (`urllib3<2`) to avoid LibreSSL warnings.
 - Generated outputs (`reports/`) and debug logs (`debug_espn_raw.txt`) are ignored by Git via `.gitignore`.
 - All credentials are read from environment variables; nothing sensitive is committed to the repo.
