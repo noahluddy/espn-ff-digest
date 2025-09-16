@@ -2,12 +2,8 @@ name: Daily ESPN Fantasy Football Digest
 
 on:
   schedule:
-    # Run daily at 6:00 AM Central Time (12:00 PM UTC during CST, 11:00 AM UTC during CDT)
-    # Note: GitHub Actions uses UTC time, so we need to account for daylight saving time
-    # During CST (winter): 6am CT = 12pm UTC
-    # During CDT (summer): 6am CT = 11am UTC
-    # We'll use 12pm UTC as the primary schedule since fantasy football season is typically during CST
-    - cron: '0 12 * * *'
+    # Run daily at 11:00 AM UTC (6:00 AM CST, 7:00 AM CDT)
+    - cron: '0 11 * * *'
   
   # Allow manual triggering for testing
   workflow_dispatch:
