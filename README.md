@@ -1,6 +1,6 @@
 ### ESPN Fantasy Foobtall Activity Digest
 
-Generate a clean HTML digest of recent ESPN Fantasy Football league activity, with drops listed first. Outputs go to `reports/` and open in your default browser.
+Generate a clean HTML digest of recent ESPN Fantasy Football league activity, with drops listed first. The digest emailed via the Gmail API or, in DEBUG mode, go to `reports/` and open in your default browser.
 
 ### Requirements
 - Python 3.13+
