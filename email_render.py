@@ -254,6 +254,6 @@ def render_email_html(grouped: dict[str, list[dict[str, Any]]],
     body = "".join(sections)
     return (f'<!doctype html><meta charset="utf-8">'
             f'<div style="{styles["wrap"]}">'
-            f'<h1 style="{styles["h1"]}">Activity for {league_title}</h1>'
+            f'<h1 style="{styles["h1"]}">Digest for {league_title}</h1>'
             f'<h2 style="{styles["h2"]}">{window_desc}</h2>'
             f'{body}</div>')
