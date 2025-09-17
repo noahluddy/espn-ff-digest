@@ -477,7 +477,7 @@ def get_activity_since(league: League, since_utc: datetime) -> dict[str, list[di
             grouped["Combined"].extend(combined_items)
 
     for cat in grouped:
-        grouped[cat].sort(key=lambda d: (d["when_utc"], d["team"], d["player"]))
+        grouped[cat].sort(key=lambda d: (d["when_utc"], -d.get("bid", 0), d["team"], d["player"]))
     return grouped
 
 

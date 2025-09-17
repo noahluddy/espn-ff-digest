@@ -230,9 +230,8 @@ def render_email_html(grouped: dict[str, list[dict[str, Any]]],
                 f'<th style="{styles["th"]}">Action</th>'
                 f'</tr></thead><tbody>{rows_html}</tbody></table></div>')
 
-    # Get all combined actions and sort by time
+    # Get all combined actions (already sorted by main.py)
     all_actions = grouped.get("Combined", [])
-    all_actions.sort(key=lambda d: d.get("when_utc", datetime.now()))
 
     # Get dropped players for the separate table
     dropped_players = [action for action in all_actions if "Dropped" in action.get("player", "")]
