@@ -26,6 +26,9 @@ def get_env(name: str, required: bool = True, default: str | None = None) -> str
         RuntimeError: If required variable is missing or empty
     """
     val = os.environ.get(name, default)
+    # If the value is empty string and we have a default, use the default
+    if not val and default is not None:
+        val = default
     if required and not val:
         raise RuntimeError(f"Missing required env var: {name}")
     return val
