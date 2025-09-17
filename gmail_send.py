@@ -4,7 +4,6 @@ This module provides functions to send HTML emails via Gmail API for fantasy
 football league activity reports.
 """
 
-import os
 import base64
 import json
 from typing import Any
@@ -13,8 +12,8 @@ from email.mime.text import MIMEText
 from dotenv import load_dotenv
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
-from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
+from utils import get_env
 
 SCOPES = ["https://www.googleapis.com/auth/gmail.send"]
 load_dotenv()  # pulls EMAIL_* from .env
@@ -43,10 +42,7 @@ def _get_service():
         ValueError: If token is missing or invalid
     """
     # Read token from environment variable (base64 encoded)
-    token_b64 = os.environ.get("GMAIL_TOKEN_B64")
-    
-    if not token_b64:
-        raise ValueError("GMAIL_TOKEN_B64 environment variable is required")
+    token_b64 = get_env("GMAIL_TOKEN_B64")
     
     # Decode base64 token (strip whitespace including newlines)
     try:
@@ -78,10 +74,10 @@ def send_gmail_html(subject: str, html: str) -> None:
     Raises:
         ValueError: If no recipients are specified or service fails
     """
-    from_addr = os.environ.get("EMAIL_FROM")
-    to_list = _parse_list(os.environ.get("EMAIL_TO"))
-    cc_list = _parse_list(os.environ.get("EMAIL_CC")) or []
-    bcc_list = _parse_list(os.environ.get("EMAIL_BCC")) or []
+    from_addr = get_env("EMAIL_FROM")
+    to_list = _parse_list(get_env("EMAIL_TO", required=False, default="")) or []
+    cc_list = _parse_list(get_env("EMAIL_CC", required=False, default="")) or []
+    bcc_list = _parse_list(get_env("EMAIL_BCC", required=False, default="")) or []
 
     if not to_list and not bcc_list:
         raise ValueError("Need at least one recipient in TO or BCC.")

@@ -5,8 +5,6 @@ This script fetches recent activity from an ESPN Fantasy Football league
 and generates an HTML report showing trades, adds, drops, and other transactions.
 """
 
-import os
-import re
 import webbrowser
 from collections import defaultdict
 from dataclasses import dataclass
@@ -14,16 +12,14 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
-from dateutil import tz
 from dotenv import load_dotenv
 from espn_api.football import League
 from gmail_send import send_gmail_html
 from email_render import render_email_html
+from utils import get_env, debug, fmt_team, fmt_player, fmt_local, CENTRAL_TIME
 
 load_dotenv()
 
-# Always display times in US Central Time (handles CST/CDT automatically)
-CENTRAL_TIME = tz.gettz("America/Chicago")
 
 @dataclass
 class PlayerInfo:
@@ -49,33 +45,7 @@ class ActivityItem:
     dropped_player: PlayerInfo | None = None
 
 # ---------- utils ----------
-def get_env(name: str, required: bool = True, default: str | None = None) -> str:
-    """Get environment variable with optional validation.
-    
-    Args:
-        name: Environment variable name
-        required: Whether the variable is required
-        default: Default value if not found
-        
-    Returns:
-        Environment variable value
-        
-    Raises:
-        RuntimeError: If required variable is missing or empty
-    """
-    val = os.environ.get(name, default)
-    if required and not val:
-        raise RuntimeError(f"Missing required env var: {name}")
-    return val
 
-def debug() -> bool:
-    """Check if DEBUG is enabled.
-    
-    Returns:
-        True if DEBUG environment variable is set to a truthy value
-    """
-    debug_val = get_env("DEBUG", default="", required=False)
-    return debug_val.lower() in {"1", "true", "yes", "on"}
 
 def league_handle() -> League:
     """Create and return a League instance using environment variables.
@@ -147,34 +117,7 @@ def classify_action(action_text: str) -> str:
         case _:
             return "Other"
 
-def fmt_team(team_obj: Any) -> str:
-    """Format team object to string, trying team_name, team_abbrev, then str()."""
-    return (getattr(team_obj, "team_name", None) or
-            getattr(team_obj, "team_abbrev", None) or
-            str(team_obj))
 
-def fmt_player(player_obj: Any) -> str:
-    """Format player object to string with position and team info."""
-    if hasattr(player_obj, "name"):
-        name = player_obj.name
-        # Don't add position/proTeam info if name already includes "D/ST"
-        if "D/ST" in name:
-            return name
-        pos = getattr(player_obj, "position", "")
-        pro = getattr(player_obj, "proTeam", "")
-        extras = ", ".join([p for p in [pos, pro] if p])
-        return f"{name} ({extras})" if extras else name
-    return str(player_obj)
-
-def strip_html_tags(text: str) -> str:
-    """Remove simple HTML tags like <strong> from a string for plain-text extraction."""
-    if not isinstance(text, str):
-        return str(text)
-    return re.sub(r"<[^>]+>", "", text)
-
-def fmt_local(dt_utc: datetime) -> str:
-    """Format UTC datetime to local time string."""
-    return dt_utc.astimezone(CENTRAL_TIME).strftime("%Y-%m-%d %I:%M %p")
 
 def format_individual_action(item: dict[str, Any]) -> str:
     """Format individual action text with proper styling."""
@@ -511,7 +454,7 @@ def write_html_file(html: str, auto_open: bool = True) -> str:
 # ---------- main ----------
 def main():
     """Main function to generate and display league activity report."""
-    lookback_hours = int(os.environ.get("LOOKBACK_HOURS", "24"))
+    lookback_hours = int(get_env(name="LOOKBACK_HOURS", required=False, default="24"))
     since_utc = datetime.now(timezone.utc) - timedelta(hours=lookback_hours)
 
     lg = league_handle()

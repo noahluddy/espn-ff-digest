@@ -5,8 +5,8 @@ league activity reports.
 """
 
 import re
-from datetime import datetime
 from typing import Any
+from utils import strip_html_tags, is_dst_player, get_player_headshot_url, get_team_logo_url
 
 def _get_email_styles() -> dict[str, str]:
     """Get CSS styles for email rendering - enhanced and email-safe.
@@ -46,33 +46,6 @@ def _get_email_styles() -> dict[str, str]:
     }
 
 
-def get_player_headshot_url(player_id: int) -> str:
-    """Get ESPN headshot URL for a player.
-    
-    Args:
-        player_id: ESPN player ID
-        
-    Returns:
-        URL string for player headshot image
-    """
-    return f"https://a.espncdn.com/i/headshots/nfl/players/full/{player_id}.png"
-
-
-def get_team_logo_url(team_abbrev: str) -> str:
-    """Get ESPN team logo URL for D/ST teams.
-    
-    Args:
-        team_abbrev: Team abbreviation (e.g., "KC", "NE")
-        
-    Returns:
-        URL string for team logo image
-    """
-    return f"https://a.espncdn.com/i/teamlogos/nfl/500/{team_abbrev.lower()}.png"
-
-
-def is_dst_player(player_name: str) -> bool:
-    """Check if this is a D/ST (Defense/Special Teams) player."""
-    return "D/ST" in player_name or "DST" in player_name
 
 
 def extract_player_info_from_action(action_text: str) -> tuple[str, int | None]:
@@ -156,11 +129,6 @@ def render_email_html(grouped: dict[str, list[dict[str, Any]]],
     """
     styles = _get_email_styles()
 
-    def strip_html_tags(text: str) -> str:
-        """Remove simple HTML tags like <strong> from a string for plain-text extraction."""
-        if not isinstance(text, str):
-            return str(text)
-        return re.sub(r"<[^>]+>", "", text)
 
     def render_dropped_players_table(items):
         """Render a simple list showing only dropped player names with enhanced styling."""

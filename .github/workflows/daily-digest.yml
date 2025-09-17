@@ -36,13 +36,13 @@ jobs:
         YEAR: ${{ secrets.YEAR }}
         SWID: ${{ secrets.SWID }}
         ESPN_S2: ${{ secrets.ESPN_S2 }}
-        LOOKBACK_HOURS: ${{ secrets.LOOKBACK_HOURS || '24' }}
+        LOOKBACK_HOURS: ${{ secrets.LOOKBACK_HOURS }}
         DEBUG: '0'
         GMAIL_TOKEN_B64: ${{ secrets.GMAIL_TOKEN_B64 }}
         EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
-        EMAIL_TO: ${{ secrets.EMAIL_TO || '' }}
-        EMAIL_CC: ${{ secrets.EMAIL_CC || '' }}
-        EMAIL_BCC: ${{ secrets.EMAIL_BCC || '' }}
+        EMAIL_TO: ${{ secrets.EMAIL_TO }}
+        EMAIL_CC: ${{ secrets.EMAIL_CC }}
+        EMAIL_BCC: ${{ secrets.EMAIL_BCC }}
       run: |
         python main.py
         
