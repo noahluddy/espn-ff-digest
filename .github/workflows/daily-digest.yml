@@ -26,10 +26,6 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
         
-    - name: Create token file from base64
-      run: |
-        echo "${{ secrets.GMAIL_TOKEN_B64 }}" | base64 -d > token.json
-        
     - name: Run ESPN Activity Digest
       env:
         LEAGUE_ID: ${{ secrets.LEAGUE_ID }}
@@ -45,8 +41,3 @@ jobs:
         EMAIL_BCC: ${{ secrets.EMAIL_BCC }}
       run: |
         python main.py
-        
-    - name: Clean up token file
-      if: always()
-      run: |
-        rm -f token.json
