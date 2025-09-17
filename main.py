@@ -5,8 +5,8 @@ This script fetches recent activity from an ESPN Fantasy Football league
 and generates an HTML report showing trades, adds, drops, and other transactions.
 """
 
-import webbrowser
 import time
+import webbrowser
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -15,9 +15,10 @@ from typing import Any
 
 from dotenv import load_dotenv
 from espn_api.football import League
-from gmail_send import send_gmail_html
+
 from email_render import render_email_html
-from utils import get_env, debug, fmt_team, fmt_player, fmt_local, CENTRAL_TIME
+from gmail_send import send_gmail_html
+from utils import CENTRAL_TIME, debug, fmt_local, fmt_player, fmt_team, get_env
 
 load_dotenv()
 
@@ -49,10 +50,10 @@ class ActivityItem:
 
 def _extract_player_info(player_obj: Any) -> dict[str, Any]:
     """Extract standardized player information from player object.
-    
+
     Args:
         player_obj: Player object from ESPN API
-        
+
     Returns:
         Dictionary with player_id, position, pro_team, and name
     """
@@ -63,7 +64,7 @@ def _extract_player_info(player_obj: Any) -> dict[str, Any]:
             "pro_team": "",
             "name": ""
         }
-    
+
     return {
         "player_id": getattr(player_obj, "playerId", None),
         "position": getattr(player_obj, "position", ""),
@@ -73,10 +74,10 @@ def _extract_player_info(player_obj: Any) -> dict[str, Any]:
 
 def _extract_player_info_from_dict(item: dict[str, Any]) -> dict[str, Any]:
     """Extract player information from activity item dictionary.
-    
+
     Args:
         item: Activity item dictionary
-        
+
     Returns:
         Dictionary with player_id, position, pro_team, and name
     """
@@ -89,10 +90,10 @@ def _extract_player_info_from_dict(item: dict[str, Any]) -> dict[str, Any]:
 
 def league_handle() -> League:
     """Create and return a League instance using environment variables.
-    
+
     Returns:
         Configured League instance
-        
+
     Raises:
         RuntimeError: If required environment variables are missing
         ValueError: If league_id or year cannot be converted to int
@@ -109,10 +110,10 @@ def league_handle() -> League:
 
 def normalize_action_tuple(t: Any) -> tuple[Any, str, Any, Any]:
     """Normalize ESPN action tuple to consistent format.
-    
+
     Args:
         t: Action data from ESPN API (list, tuple, dict, or other)
-        
+
     Returns:
         Tuple of (team, action, player, bid) with normalized action text
     """
@@ -120,7 +121,7 @@ def normalize_action_tuple(t: Any) -> tuple[Any, str, Any, Any]:
         team, action, player = t[0], t[1], t[2]
         bid = t[3] if len(t) >= 4 else None
         return team, str(action).lower(), player, bid
-    
+
     if isinstance(t, dict):
         return (
             t.get("team"),
@@ -128,15 +129,15 @@ def normalize_action_tuple(t: Any) -> tuple[Any, str, Any, Any]:
             t.get("player"),
             t.get("bid") or t.get("amount"),
         )
-    
+
     return None, str(t).lower(), t, None
 
 def classify_action(action_text: str) -> str:
     """Classify ESPN action text into categories.
-    
+
     Args:
         action_text: Raw action text from ESPN API
-        
+
     Returns:
         Category string: "Trades", "Drops", "Adds", "Waivers", "Roster Moves", or "Other"
     """
@@ -158,14 +159,13 @@ def classify_action(action_text: str) -> str:
             return "Other"
 
 
-
 def format_individual_action(item: dict[str, Any]) -> str:
     """Format individual action text with proper styling."""
     action_type = item["action_type"]
     action_text = item["action"].lower()
     player = item["player"]
     bid = item["bid"]
-    
+
     match action_type:
         case "Adds":
             if "waiver added" in action_text:
@@ -202,7 +202,7 @@ def _process_activity_actions(actions: list[Any],
 
         # Extract player details for headshot support
         player_info = _extract_player_info(player_obj)
-        
+
         activity_item = {
             "when_utc": ts_utc,
             "team": fmt_team(team_obj),
@@ -258,7 +258,7 @@ def _process_add_drop_combinations(adds: list[dict[str, Any]],
             # Found a pair - process immediately
             used_adds.add(j)
             used_drops.add(i)
-            
+
             is_waiver_claim = "waiver" in add_item["action"].lower()
 
             if is_waiver_claim:
@@ -277,7 +277,8 @@ def _process_add_drop_combinations(adds: list[dict[str, Any]],
                 "when_utc": ts_utc,
                 "team": add_item["team"],
                 "player": player_text,
-                "bid": add_item["bid"] if is_waiver_claim else max(add_item["bid"], drop_item["bid"]),
+                "bid": (add_item["bid"] if is_waiver_claim
+                       else max(add_item["bid"], drop_item["bid"])),
                 "action_type": "Combined",
                 "added_player": added_player_info,
                 "dropped_player": dropped_player_info
@@ -307,7 +308,7 @@ def _process_add_drop_combinations(adds: list[dict[str, Any]],
             }
         }
         combined_items.append(combined_item)
-    
+
     # Process remaining drops
     for item in remaining_drops:
         formatted_action = format_individual_action(item)
@@ -361,20 +362,20 @@ def _process_trades(trades: list[dict[str, Any]], ts_utc: datetime) -> dict[str,
     team_trades = defaultdict(list)
     for trade in trades:
         team_trades[trade["team"]].append(trade)
-    
+
     # For multi-team trades, we need to determine the main team and what they traded for
     # The team with the most trade actions is typically the "main" team in the transaction
     main_team = max(team_trades.keys(), key=lambda t: len(team_trades[t]))
     other_teams = [team for team in team_trades.keys() if team != main_team]
-    
+
     # Get players from main team (what they're giving up)
     main_team_players = [f"<strong>{t['player']}</strong>" for t in team_trades[main_team]]
-    
+
     # Get players from other teams (what they're receiving)
     received_players = []
     for team in other_teams:
         received_players.extend([f"<strong>{t['player']}</strong>" for t in team_trades[team]])
-    
+
     # Format the trade text
     if len(main_team_players) == 1 and len(received_players) == 1:
         trade_text = f"Traded {main_team_players[0]} for {received_players[0]}"
@@ -384,7 +385,7 @@ def _process_trades(trades: list[dict[str, Any]], ts_utc: datetime) -> dict[str,
         trade_text = f"Traded {', '.join(main_team_players)} for {received_players[0]}"
     else:
         trade_text = f"Traded {', '.join(main_team_players)} for {', '.join(received_players)}"
-    
+
     return {
         "when_utc": ts_utc,
         "team": main_team,
@@ -438,7 +439,7 @@ def _process_single_activity(act: Any, since_utc: datetime) -> list[dict[str, An
         formatted_action = format_individual_action(item)
         # For individual actions, determine if it's an add or drop
         is_drop = "Dropped" in formatted_action or "drop" in item.get("action", "").lower()
-        
+
         combined_item = {
             "when_utc": item["when_utc"],
             "team": item["team"],
@@ -462,22 +463,24 @@ def _process_single_activity(act: Any, since_utc: datetime) -> list[dict[str, An
     return combined_items
 
 
-def _fetch_activity_with_retry(league: League, max_retries: int = 3, delay: float = 1.0) -> list[Any]:
+def _fetch_activity_with_retry(league: League,
+                              max_retries: int = 3,
+                              delay: float = 1.0) -> list[Any]:
     """Fetch league activity with retry logic for robustness.
-    
+
     Args:
         league: League instance
         max_retries: Maximum number of retry attempts
         delay: Delay between retries in seconds
-        
+
     Returns:
         List of raw activity data
-        
+
     Raises:
         RuntimeError: If all retry attempts fail
     """
     last_error = None
-    
+
     for attempt in range(max_retries + 1):
         try:
             raw_activity = league.recent_activity(size=300)
@@ -489,7 +492,7 @@ def _fetch_activity_with_retry(league: League, max_retries: int = 3, delay: floa
                 time.sleep(delay * (2 ** attempt))  # Exponential backoff
             else:
                 print(f"All API retry attempts failed. Last error: {e}")
-    
+
     raise RuntimeError(f"Failed to fetch activity after {max_retries + 1} attempts: {last_error}")
 
 def get_activity_since(league: League, since_utc: datetime) -> dict[str, list[dict[str, Any]]]:
@@ -502,7 +505,7 @@ def get_activity_since(league: League, since_utc: datetime) -> dict[str, list[di
     except RuntimeError as e:
         print(f"Error fetching activity: {e}")
         return grouped
-    
+
     if debug():
         _debug_dump_activity(raw_activity)
 
@@ -514,7 +517,7 @@ def get_activity_since(league: League, since_utc: datetime) -> dict[str, list[di
     def _get_sort_key(item: dict[str, Any]) -> tuple[datetime, int, str, str]:
         """Get sort key for activity items to avoid repeated lookups."""
         return (item["when_utc"], -item.get("bid", 0), item["team"], item["player"])
-    
+
     for cat in grouped:
         grouped[cat].sort(key=_get_sort_key)
     return grouped

@@ -6,13 +6,14 @@ football league activity reports.
 
 import base64
 import json
-from typing import Any
 from email.mime.text import MIMEText
+from typing import Any
 
 from dotenv import load_dotenv
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
+
 from utils import get_env
 
 SCOPES = ["https://www.googleapis.com/auth/gmail.send"]
@@ -20,10 +21,10 @@ load_dotenv()  # pulls EMAIL_* from .env
 
 def _parse_list(env_value: str | None) -> list[str]:
     """Parse comma or semicolon separated email addresses from environment variable.
-    
+
     Args:
         env_value: String containing email addresses separated by commas or semicolons
-        
+
     Returns:
         List of cleaned email addresses
     """
@@ -34,25 +35,25 @@ def _parse_list(env_value: str | None) -> list[str]:
 
 def _get_service():
     """Get authenticated Gmail service instance.
-    
+
     Returns:
         Gmail service instance for sending emails
-        
+
     Raises:
         ValueError: If token is missing or invalid
     """
     # Read token from environment variable (base64 encoded)
     token_b64 = get_env("GMAIL_TOKEN_B64")
-    
+
     # Decode base64 token (strip whitespace including newlines)
     try:
         token_data = json.loads(base64.b64decode(token_b64.strip()).decode('utf-8'))
     except (base64.binascii.Error, json.JSONDecodeError, UnicodeDecodeError) as e:
         raise ValueError(f"Failed to decode base64 token: {e}") from e
-    
+
     # Create credentials object from token data
     creds = Credentials.from_authorized_user_info(token_data, SCOPES)
-    
+
     # Refresh token if needed
     if not creds.valid:
         if creds.expired and creds.refresh_token:
@@ -61,16 +62,16 @@ def _get_service():
             # If we can't refresh, we need to re-authenticate using the credentials
             # This shouldn't happen in GitHub Actions if token is valid
             raise ValueError("Invalid or expired token and no refresh token available")
-    
+
     return build("gmail", "v1", credentials=creds)
 
 def send_gmail_html(subject: str, html: str) -> None:
     """Send HTML email via Gmail API.
-    
+
     Args:
         subject: Email subject line
         html: HTML content of the email
-        
+
     Raises:
         ValueError: If no recipients are specified or service fails
     """

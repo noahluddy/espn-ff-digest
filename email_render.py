@@ -7,11 +7,12 @@ league activity reports.
 import re
 from io import StringIO
 from typing import Any
-from utils import strip_html_tags, is_dst_player, get_player_headshot_url, get_team_logo_url
+
+from utils import get_player_headshot_url, get_team_logo_url, is_dst_player, strip_html_tags
 
 def _get_email_styles() -> dict[str, str]:
     """Get CSS styles for email rendering - enhanced and email-safe.
-    
+
     Returns:
         Dictionary mapping style names to CSS strings
     """
@@ -33,10 +34,13 @@ def _get_email_styles() -> dict[str, str]:
                  "border:1px solid #93c5fd; background:#dbeafe; "
                  "border-radius:12px; padding:3px 10px; margin-left:8px;"),
         "player_row": "padding:8px 0; border-bottom:1px solid #f3f4f6;",
-        "player_name": "font-weight:600; color:#1a1a1a; font-size:15px; display:block; line-height:1.3; word-break:break-word;",
+        "player_name": ("font-weight:600; color:#1a1a1a; font-size:15px; "
+                       "display:block; line-height:1.3; word-break:break-word;"),
         "player_details": "color:#6b7280; font-size:13px; margin-top:2px;",
-        "headshot": "display:block; width:64px; height:48px; border-radius:50%; vertical-align:middle;",
-        "team_logo": "display:block; width:48px; height:48px; border-radius:50%; vertical-align:middle; padding-right:9px;",
+        "headshot": ("display:block; width:64px; height:48px; border-radius:50%; "
+                    "vertical-align:middle;"),
+        "team_logo": ("display:block; width:48px; height:48px; border-radius:50%; "
+                     "vertical-align:middle; padding-right:9px;"),
         "media_tbl": "border-collapse:collapse; border-spacing:0; width:100%;",
         "media_img_cell": "width:64px; padding:0 12px 0 0; vertical-align:middle;",
         "media_img_cell_dst": "width:64px; padding:0 12px 0 7px; vertical-align:middle;",
@@ -47,11 +51,9 @@ def _get_email_styles() -> dict[str, str]:
     }
 
 
-
-
 def extract_player_info_from_action(action_text: str) -> tuple[str, int | None]:
     """Extract player name and ID from action text.
-    
+
     Returns:
         Tuple of (player_name, player_id) where player_id may be None
     """
@@ -61,12 +63,12 @@ def extract_player_info_from_action(action_text: str) -> tuple[str, int | None]:
     return player_name, None
 
 
-def format_player_with_headshot(player_name: str, player_id: int | None = None, 
+def format_player_with_headshot(player_name: str, player_id: int | None = None,
                                team_abbrev: str = "") -> str:
     """Format player with headshot image for email display (simplified - no redundant info)."""
     styles = _get_email_styles()
     output = StringIO()
-    
+
     # Check if this is a D/ST team
     if is_dst_player(player_name) and team_abbrev:
         # Use team logo for D/ST (square)
@@ -109,24 +111,23 @@ def format_player_with_headshot(player_name: str, player_id: int | None = None,
         output.write(f'</tr>')
         output.write(f'</table>')
         output.write(f'</div>')
-    
+
     return output.getvalue()
 
 
 def render_email_html(grouped: dict[str, list[dict[str, Any]]],
                      window_desc: str, league_title: str) -> str:
     """Render HTML email content for fantasy football league activity.
-    
+
     Args:
         grouped: Dictionary of activity categories with their items
         window_desc: Description of the time window for the activity
         league_title: Title of the fantasy football league
-        
+
     Returns:
         HTML string for the email content
     """
     styles = _get_email_styles()
-
 
     def render_dropped_players_table(items):
         """Render a simple list showing only dropped player names with enhanced styling."""
@@ -139,13 +140,13 @@ def render_email_html(grouped: dict[str, list[dict[str, Any]]],
         output.write(f'<div style="{styles["card"]}"><table role="presentation" ')
         output.write(f'style="{styles["tbl"]}" cellpadding="0" cellspacing="0">')
         output.write(f'<tbody>')
-        
+
         for i in items:
             # Extract dropped player information from the new data structure
             dropped_player_info = i.get('dropped_player', {})
             dropped_player_name = dropped_player_info.get('name', '')
             dropped_player_id = dropped_player_info.get('player_id')
-            
+
             # If no dropped player info in new structure, fall back to parsing action text
             if not dropped_player_name:
                 action_text = strip_html_tags(i['player'])
@@ -163,7 +164,7 @@ def render_email_html(grouped: dict[str, list[dict[str, Any]]],
 
             # Get team abbreviation for D/ST teams
             team_abbrev = dropped_player_info.get('pro_team', '')
-            
+
             # Format player with headshot
             player_html = format_player_with_headshot(dropped_player_name, dropped_player_id, team_abbrev)
             output.write(f'<tr><td style="{styles["td"]}">{player_html}</td></tr>')
@@ -186,7 +187,7 @@ def render_email_html(grouped: dict[str, list[dict[str, Any]]],
         output.write(f'<th style="{styles["th"]}">Team</th>')
         output.write(f'<th style="{styles["th"]}">Action</th>')
         output.write(f'</tr></thead><tbody>')
-        
+
         for i in items:
             # Enhanced row with better styling
             output.write(f'<tr>')

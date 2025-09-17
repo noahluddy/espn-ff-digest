@@ -4,6 +4,7 @@ import os
 import re
 from datetime import datetime
 from typing import Any
+
 from dateutil import tz
 
 # Always display times in US Central Time (handles CST/CDT automatically)
@@ -12,15 +13,15 @@ CENTRAL_TIME = tz.gettz("America/Chicago")
 
 def get_env(name: str, required: bool = True, default: str | None = None) -> str:
     """Get environment variable with optional validation.
-    
+
     Args:
         name: Environment variable name
         required: Whether the variable is required
         default: Default value if not found
-        
+
     Returns:
         Environment variable value
-        
+
     Raises:
         RuntimeError: If required variable is missing or empty
     """
@@ -32,7 +33,7 @@ def get_env(name: str, required: bool = True, default: str | None = None) -> str
 
 def debug() -> bool:
     """Check if DEBUG is enabled.
-    
+
     Returns:
         True if DEBUG environment variable is set to a truthy value
     """
@@ -75,10 +76,10 @@ def is_dst_player(player_name: str) -> bool:
 
 def get_player_headshot_url(player_id: int) -> str:
     """Get ESPN headshot URL for a player.
-    
+
     Args:
         player_id: ESPN player ID
-        
+
     Returns:
         URL string for the player's headshot image
     """
@@ -87,10 +88,10 @@ def get_player_headshot_url(player_id: int) -> str:
 
 def get_team_logo_url(team_abbrev: str) -> str:
     """Get ESPN team logo URL.
-    
+
     Args:
         team_abbrev: Team abbreviation (e.g., 'GB', 'KC')
-        
+
     Returns:
         URL string for the team's logo image
     """
