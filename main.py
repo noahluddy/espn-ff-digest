@@ -319,21 +319,46 @@ def _process_trades(trades: list[dict[str, Any]], ts_utc: datetime) -> dict[str,
             }
         }
 
-    # Multi-player trade
-    trade_players = [f"<strong>{t['player']}</strong>" for t in trades]
-    trade_text = (f"Traded {trade_players[0]} for "
-                 f"{', '.join(trade_players[1:])}")
+    # Group trades by team to understand who is giving up what and receiving what
+    from collections import defaultdict
+    team_trades = defaultdict(list)
+    for trade in trades:
+        team_trades[trade["team"]].append(trade)
+    
+    # For multi-team trades, we need to determine the main team and what they traded for
+    # The team with the most trade actions is typically the "main" team in the transaction
+    main_team = max(team_trades.keys(), key=lambda t: len(team_trades[t]))
+    other_teams = [team for team in team_trades.keys() if team != main_team]
+    
+    # Get players from main team (what they're giving up)
+    main_team_players = [f"<strong>{t['player']}</strong>" for t in team_trades[main_team]]
+    
+    # Get players from other teams (what they're receiving)
+    received_players = []
+    for team in other_teams:
+        received_players.extend([f"<strong>{t['player']}</strong>" for t in team_trades[team]])
+    
+    # Format the trade text
+    if len(main_team_players) == 1 and len(received_players) == 1:
+        trade_text = f"Traded {main_team_players[0]} for {received_players[0]}"
+    elif len(main_team_players) == 1:
+        trade_text = f"Traded {main_team_players[0]} for {', '.join(received_players)}"
+    elif len(received_players) == 1:
+        trade_text = f"Traded {', '.join(main_team_players)} for {received_players[0]}"
+    else:
+        trade_text = f"Traded {', '.join(main_team_players)} for {', '.join(received_players)}"
+    
     return {
         "when_utc": ts_utc,
-        "team": trades[0]["team"],
+        "team": main_team,
         "player": trade_text,
         "bid": max(t["bid"] for t in trades),
         "action_type": "Combined",
         "added_player": {
-            "player_id": trades[0].get("player_id"),
-            "position": trades[0].get("position", ""),
-            "pro_team": trades[0].get("pro_team", ""),
-            "name": trades[0].get("player", "").replace("<strong>", "").replace("</strong>", "")
+            "player_id": team_trades[main_team][0].get("player_id"),
+            "position": team_trades[main_team][0].get("position", ""),
+            "pro_team": team_trades[main_team][0].get("pro_team", ""),
+            "name": team_trades[main_team][0].get("player", "").replace("<strong>", "").replace("</strong>", "")
         },
         "dropped_player": {
             "player_id": None,
