@@ -5,6 +5,7 @@ league activity reports.
 """
 
 import re
+from io import StringIO
 from typing import Any
 from utils import strip_html_tags, is_dst_player, get_player_headshot_url, get_team_logo_url
 
@@ -64,55 +65,52 @@ def format_player_with_headshot(player_name: str, player_id: int | None = None,
                                team_abbrev: str = "") -> str:
     """Format player with headshot image for email display (simplified - no redundant info)."""
     styles = _get_email_styles()
+    output = StringIO()
     
     # Check if this is a D/ST team
     if is_dst_player(player_name) and team_abbrev:
         # Use team logo for D/ST (square)
         logo_url = get_team_logo_url(team_abbrev)
-        return (
-            f'<div style="{styles["player_row"]}">'
-            f'<table role="presentation" style="{styles["media_tbl"]}" cellpadding="0" cellspacing="0">'
-            f'<tr>'
-            f'<td style="{styles["media_img_cell_dst"]}">'
-            f'<img src="{logo_url}" alt="{player_name}" style="{styles["team_logo"]}" />'
-            f'</td>'
-            f'<td style="{styles["media_text_cell"]}">'
-            f'<span style="{styles["player_name"]}">{player_name}</span>'
-            f'</td>'
-            f'</tr>'
-            f'</table>'
-            f'</div>'
-        )
+        output.write(f'<div style="{styles["player_row"]}">')
+        output.write(f'<table role="presentation" style="{styles["media_tbl"]}" cellpadding="0" cellspacing="0">')
+        output.write(f'<tr>')
+        output.write(f'<td style="{styles["media_img_cell_dst"]}">')
+        output.write(f'<img src="{logo_url}" alt="{player_name}" style="{styles["team_logo"]}" />')
+        output.write(f'</td>')
+        output.write(f'<td style="{styles["media_text_cell"]}">')
+        output.write(f'<span style="{styles["player_name"]}">{player_name}</span>')
+        output.write(f'</td>')
+        output.write(f'</tr>')
+        output.write(f'</table>')
+        output.write(f'</div>')
     elif player_id:
         # Use player headshot for regular players
         headshot_url = get_player_headshot_url(player_id)
-        return (
-            f'<div style="{styles["player_row"]}">'
-            f'<table role="presentation" style="{styles["media_tbl"]}" cellpadding="0" cellspacing="0">'
-            f'<tr>'
-            f'<td style="{styles["media_img_cell"]}">'
-            f'<img src="{headshot_url}" alt="{player_name}" style="{styles["headshot"]}" />'
-            f'</td>'
-            f'<td style="{styles["media_text_cell"]}">'
-            f'<span style="{styles["player_name"]}">{player_name}</span>'
-            f'</td>'
-            f'</tr>'
-            f'</table>'
-            f'</div>'
-        )
+        output.write(f'<div style="{styles["player_row"]}">')
+        output.write(f'<table role="presentation" style="{styles["media_tbl"]}" cellpadding="0" cellspacing="0">')
+        output.write(f'<tr>')
+        output.write(f'<td style="{styles["media_img_cell"]}">')
+        output.write(f'<img src="{headshot_url}" alt="{player_name}" style="{styles["headshot"]}" />')
+        output.write(f'</td>')
+        output.write(f'<td style="{styles["media_text_cell"]}">')
+        output.write(f'<span style="{styles["player_name"]}">{player_name}</span>')
+        output.write(f'</td>')
+        output.write(f'</tr>')
+        output.write(f'</table>')
+        output.write(f'</div>')
     else:
         # No image available
-        return (
-            f'<div style="{styles["player_row"]}">'
-            f'<table role="presentation" style="{styles["media_tbl"]}" cellpadding="0" cellspacing="0">'
-            f'<tr>'
-            f'<td style="{styles["media_text_cell"]}">'
-            f'<span style="{styles["player_name"]}">{player_name}</span>'
-            f'</td>'
-            f'</tr>'
-            f'</table>'
-            f'</div>'
-        )
+        output.write(f'<div style="{styles["player_row"]}">')
+        output.write(f'<table role="presentation" style="{styles["media_tbl"]}" cellpadding="0" cellspacing="0">')
+        output.write(f'<tr>')
+        output.write(f'<td style="{styles["media_text_cell"]}">')
+        output.write(f'<span style="{styles["player_name"]}">{player_name}</span>')
+        output.write(f'</td>')
+        output.write(f'</tr>')
+        output.write(f'</table>')
+        output.write(f'</div>')
+    
+    return output.getvalue()
 
 
 def render_email_html(grouped: dict[str, list[dict[str, Any]]],
@@ -135,7 +133,13 @@ def render_email_html(grouped: dict[str, list[dict[str, Any]]],
         if not items:
             return ""
 
-        rows = []
+        output = StringIO()
+        output.write(f'<h3 style="{styles["h3"]}">Dropped Players')
+        output.write(f'  <span style="{styles["pill"]}">{len(items)}</span></h3>')
+        output.write(f'<div style="{styles["card"]}"><table role="presentation" ')
+        output.write(f'style="{styles["tbl"]}" cellpadding="0" cellspacing="0">')
+        output.write(f'<tbody>')
+        
         for i in items:
             # Extract dropped player information from the new data structure
             dropped_player_info = i.get('dropped_player', {})
@@ -162,41 +166,37 @@ def render_email_html(grouped: dict[str, list[dict[str, Any]]],
             
             # Format player with headshot
             player_html = format_player_with_headshot(dropped_player_name, dropped_player_id, team_abbrev)
-            rows.append(f'<tr><td style="{styles["td"]}">{player_html}</td></tr>')
+            output.write(f'<tr><td style="{styles["td"]}">{player_html}</td></tr>')
 
-        rows_html = "".join(rows)
-        return (f'<h3 style="{styles["h3"]}">Dropped Players'
-                f'  <span style="{styles["pill"]}">{len(items)}</span></h3>'
-                f'<div style="{styles["card"]}"><table role="presentation" '
-                f'style="{styles["tbl"]}" cellpadding="0" cellspacing="0">'
-                f'<tbody>{rows_html}</tbody></table></div>')
+        output.write(f'</tbody></table></div>')
+        return output.getvalue()
 
     def render_all_activity_table(items):
         """Render a single combined table with all actions sorted by time with enhanced styling."""
         if not items:
             return ""
 
-        rows = []
+        output = StringIO()
+        output.write(f'<h3 style="{styles["h3"]}">All Activity')
+        output.write(f'  <span style="{styles["pill"]}">{len(items)}</span></h3>')
+        output.write(f'<div style="{styles["card"]}"><table role="presentation" ')
+        output.write(f'style="{styles["tbl"]}" cellpadding="0" cellspacing="0">')
+        output.write(f'<thead><tr>')
+        output.write(f'<th style="{styles["th"]}">When (CDT)</th>')
+        output.write(f'<th style="{styles["th"]}">Team</th>')
+        output.write(f'<th style="{styles["th"]}">Action</th>')
+        output.write(f'</tr></thead><tbody>')
+        
         for i in items:
             # Enhanced row with better styling
-            timestamp_cell = f'<td style="{styles["td"]}; {styles["timestamp"]}">{i["when_local"]}</td>'
-            team_cell = f'<td style="{styles["td"]}; {styles["team_name"]}">{i["team"]}</td>'
-            
-            # Enhanced action cell with better formatting
-            action_cell = f'<td style="{styles["td"]}; {styles["action_text"]}">{i["player"]}</td>'
-            
-            rows.append(f'<tr>{timestamp_cell}{team_cell}{action_cell}</tr>')
+            output.write(f'<tr>')
+            output.write(f'<td style="{styles["td"]}; {styles["timestamp"]}">{i["when_local"]}</td>')
+            output.write(f'<td style="{styles["td"]}; {styles["team_name"]}">{i["team"]}</td>')
+            output.write(f'<td style="{styles["td"]}; {styles["action_text"]}">{i["player"]}</td>')
+            output.write(f'</tr>')
 
-        rows_html = "".join(rows)
-        return (f'<h3 style="{styles["h3"]}">All Activity'
-                f'  <span style="{styles["pill"]}">{len(items)}</span></h3>'
-                f'<div style="{styles["card"]}"><table role="presentation" '
-                f'style="{styles["tbl"]}" cellpadding="0" cellspacing="0">'
-                f'<thead><tr>'
-                f'<th style="{styles["th"]}">When (CDT)</th>'
-                f'<th style="{styles["th"]}">Team</th>'
-                f'<th style="{styles["th"]}">Action</th>'
-                f'</tr></thead><tbody>{rows_html}</tbody></table></div>')
+        output.write(f'</tbody></table></div>')
+        return output.getvalue()
 
     # Get all combined actions (already sorted by main.py)
     all_actions = grouped.get("Combined", [])
@@ -204,23 +204,23 @@ def render_email_html(grouped: dict[str, list[dict[str, Any]]],
     # Get dropped players for the separate table
     dropped_players = [action for action in all_actions if "Dropped" in action.get("player", "")]
 
-    sections = []
+    output = StringIO()
+    output.write(f'<!doctype html><meta charset="utf-8">')
+    output.write(f'<div style="{styles["wrap"]}">')
+    output.write(f'<h1 style="{styles["h1"]}">Digest for {league_title}</h1>')
+    output.write(f'<h2 style="{styles["h2"]}">{window_desc}</h2>')
 
     # Add Players Dropped table if there are any
     if dropped_players:
-        sections.append(render_dropped_players_table(dropped_players))
+        output.write(render_dropped_players_table(dropped_players))
 
     # Add All Activity table
     if not all_actions:
-        sections.append(f'<div style="{styles["card"]};padding:14px 16px;'
-                       f'{styles["h1"].split(";")[1]}">'
-                       f'No activity {window_desc}.</div>')
+        output.write(f'<div style="{styles["card"]};padding:14px 16px;'
+                    f'{styles["h1"].split(";")[1]}">'
+                    f'No activity {window_desc}.</div>')
     else:
-        sections.append(render_all_activity_table(all_actions))
+        output.write(render_all_activity_table(all_actions))
 
-    body = "".join(sections)
-    return (f'<!doctype html><meta charset="utf-8">'
-            f'<div style="{styles["wrap"]}">'
-            f'<h1 style="{styles["h1"]}">Digest for {league_title}</h1>'
-            f'<h2 style="{styles["h2"]}">{window_desc}</h2>'
-            f'{body}</div>')
+    output.write(f'</div>')
+    return output.getvalue()

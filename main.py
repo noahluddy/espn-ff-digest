@@ -6,6 +6,7 @@ and generates an HTML report showing trades, adds, drops, and other transactions
 """
 
 import webbrowser
+import time
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -46,6 +47,45 @@ class ActivityItem:
 
 # ---------- utils ----------
 
+def _extract_player_info(player_obj: Any) -> dict[str, Any]:
+    """Extract standardized player information from player object.
+    
+    Args:
+        player_obj: Player object from ESPN API
+        
+    Returns:
+        Dictionary with player_id, position, pro_team, and name
+    """
+    if not player_obj:
+        return {
+            "player_id": None,
+            "position": "",
+            "pro_team": "",
+            "name": ""
+        }
+    
+    return {
+        "player_id": getattr(player_obj, "playerId", None),
+        "position": getattr(player_obj, "position", ""),
+        "pro_team": getattr(player_obj, "proTeam", ""),
+        "name": getattr(player_obj, "name", str(player_obj))
+    }
+
+def _extract_player_info_from_dict(item: dict[str, Any]) -> dict[str, Any]:
+    """Extract player information from activity item dictionary.
+    
+    Args:
+        item: Activity item dictionary
+        
+    Returns:
+        Dictionary with player_id, position, pro_team, and name
+    """
+    return {
+        "player_id": item.get("player_id"),
+        "position": item.get("position", ""),
+        "pro_team": item.get("pro_team", ""),
+        "name": item.get("player", "").replace("<strong>", "").replace("</strong>", "")
+    }
 
 def league_handle() -> League:
     """Create and return a League instance using environment variables.
@@ -161,9 +201,7 @@ def _process_activity_actions(actions: list[Any],
         action_type = classify_action(action_text)
 
         # Extract player details for headshot support
-        player_id = getattr(player_obj, "playerId", None) if player_obj else None
-        player_position = getattr(player_obj, "position", "") if player_obj else ""
-        player_team = getattr(player_obj, "proTeam", "") if player_obj else ""
+        player_info = _extract_player_info(player_obj)
         
         activity_item = {
             "when_utc": ts_utc,
@@ -172,9 +210,7 @@ def _process_activity_actions(actions: list[Any],
             "action": action_text,
             "bid": bid or 0,
             "action_type": action_type,
-            "player_id": player_id,
-            "position": player_position,
-            "pro_team": player_team,
+            **player_info
         }
 
         # Categorize the action
@@ -209,60 +245,72 @@ def _process_add_drop_combinations(adds: list[dict[str, Any]],
         List of combined action items
     """
     combined_items = []
-    paired_items = []
-    remaining_adds = adds.copy()
-    remaining_drops = drops.copy()
+    used_adds = set()
+    used_drops = set()
 
-    # Try to pair drops with adds
-    for drop_item in drops:
-        for add_item in adds:
-            if (drop_item not in [p[0] for p in paired_items] and
-                    add_item not in [p[1] for p in paired_items]):
-                paired_items.append((drop_item, add_item))
-                remaining_adds.remove(add_item)
-                remaining_drops.remove(drop_item)
-                break
+    # Try to pair drops with adds - O(n*m) instead of O(n²)
+    for i, drop_item in enumerate(drops):
+        if i in used_drops:
+            continue
+        for j, add_item in enumerate(adds):
+            if j in used_adds:
+                continue
+            # Found a pair - process immediately
+            used_adds.add(j)
+            used_drops.add(i)
+            
+            is_waiver_claim = "waiver" in add_item["action"].lower()
 
-    # Process paired items
-    for drop_item, add_item in paired_items:
-        is_waiver_claim = "waiver" in add_item["action"].lower()
+            if is_waiver_claim:
+                player_text = (f"Dropped <strong>{drop_item['player']}</strong> "
+                              f"to claim <strong>{add_item['player']}</strong> "
+                              f"for ${add_item['bid']}")
+            else:
+                player_text = (f"Dropped <strong>{drop_item['player']}</strong> "
+                              f"for <strong>{add_item['player']}</strong>")
 
-        if is_waiver_claim:
-            player_text = (f"Dropped <strong>{drop_item['player']}</strong> "
-                          f"to claim <strong>{add_item['player']}</strong> "
-                          f"for ${add_item['bid']}")
-        else:
-            player_text = (f"Dropped <strong>{drop_item['player']}</strong> "
-                          f"for <strong>{add_item['player']}</strong>")
+            # Use helper function for player info
+            added_player_info = _extract_player_info_from_dict(add_item)
+            dropped_player_info = _extract_player_info_from_dict(drop_item)
 
-        combined = {
-            "when_utc": ts_utc,
-            "team": add_item["team"],
-            "player": player_text,
-            "bid": add_item["bid"] if is_waiver_claim else max(add_item["bid"], drop_item["bid"]),
+            combined = {
+                "when_utc": ts_utc,
+                "team": add_item["team"],
+                "player": player_text,
+                "bid": add_item["bid"] if is_waiver_claim else max(add_item["bid"], drop_item["bid"]),
+                "action_type": "Combined",
+                "added_player": added_player_info,
+                "dropped_player": dropped_player_info
+            }
+            combined_items.append(combined)
+            break
+
+    # Handle remaining unpaired items - use generators to avoid memory copies
+    remaining_adds = (adds[i] for i in range(len(adds)) if i not in used_adds)
+    remaining_drops = (drops[i] for i in range(len(drops)) if i not in used_drops)
+
+    # Process remaining adds
+    for item in remaining_adds:
+        formatted_action = format_individual_action(item)
+        combined_item = {
+            "when_utc": item["when_utc"],
+            "team": item["team"],
+            "player": formatted_action,
+            "bid": item["bid"],
             "action_type": "Combined",
-            # Store both players' information
-            "added_player": {
-                "player_id": add_item.get("player_id"),
-                "position": add_item.get("position", ""),
-                "pro_team": add_item.get("pro_team", ""),
-                "name": add_item.get("player", "").replace("<strong>", "").replace("</strong>", "")
-            },
+            "added_player": _extract_player_info_from_dict(item),
             "dropped_player": {
-                "player_id": drop_item.get("player_id"),
-                "position": drop_item.get("position", ""),
-                "pro_team": drop_item.get("pro_team", ""),
-                "name": drop_item.get("player", "").replace("<strong>", "").replace("</strong>", "")
+                "player_id": None,
+                "position": "",
+                "pro_team": "",
+                "name": ""
             }
         }
-        combined_items.append(combined)
-
-    # Handle remaining unpaired items
-    for item in remaining_adds + remaining_drops:
+        combined_items.append(combined_item)
+    
+    # Process remaining drops
+    for item in remaining_drops:
         formatted_action = format_individual_action(item)
-        # For individual actions, determine if it's an add or drop
-        is_drop = "Dropped" in formatted_action or "drop" in item.get("action", "").lower()
-        
         combined_item = {
             "when_utc": item["when_utc"],
             "team": item["team"],
@@ -270,17 +318,12 @@ def _process_add_drop_combinations(adds: list[dict[str, Any]],
             "bid": item["bid"],
             "action_type": "Combined",
             "added_player": {
-                "player_id": item.get("player_id") if not is_drop else None,
-                "position": item.get("position", "") if not is_drop else "",
-                "pro_team": item.get("pro_team", "") if not is_drop else "",
-                "name": item.get("player", "").replace("<strong>", "").replace("</strong>", "") if not is_drop else ""
+                "player_id": None,
+                "position": "",
+                "pro_team": "",
+                "name": ""
             },
-            "dropped_player": {
-                "player_id": item.get("player_id") if is_drop else None,
-                "position": item.get("position", "") if is_drop else "",
-                "pro_team": item.get("pro_team", "") if is_drop else "",
-                "name": item.get("player", "").replace("<strong>", "").replace("</strong>", "") if is_drop else ""
-            }
+            "dropped_player": _extract_player_info_from_dict(item)
         }
         combined_items.append(combined_item)
 
@@ -305,12 +348,7 @@ def _process_trades(trades: list[dict[str, Any]], ts_utc: datetime) -> dict[str,
             "player": f"Traded <strong>{trade['player']}</strong>",
             "bid": trade["bid"],
             "action_type": "Combined",
-            "added_player": {
-                "player_id": trade.get("player_id"),
-                "position": trade.get("position", ""),
-                "pro_team": trade.get("pro_team", ""),
-                "name": trade.get("player", "").replace("<strong>", "").replace("</strong>", "")
-            },
+            "added_player": _extract_player_info_from_dict(trade),
             "dropped_player": {
                 "player_id": None,
                 "position": "",
@@ -320,7 +358,6 @@ def _process_trades(trades: list[dict[str, Any]], ts_utc: datetime) -> dict[str,
         }
 
     # Group trades by team to understand who is giving up what and receiving what
-    from collections import defaultdict
     team_trades = defaultdict(list)
     for trade in trades:
         team_trades[trade["team"]].append(trade)
@@ -354,12 +391,7 @@ def _process_trades(trades: list[dict[str, Any]], ts_utc: datetime) -> dict[str,
         "player": trade_text,
         "bid": max(t["bid"] for t in trades),
         "action_type": "Combined",
-        "added_player": {
-            "player_id": team_trades[main_team][0].get("player_id"),
-            "position": team_trades[main_team][0].get("position", ""),
-            "pro_team": team_trades[main_team][0].get("pro_team", ""),
-            "name": team_trades[main_team][0].get("player", "").replace("<strong>", "").replace("</strong>", "")
-        },
+        "added_player": _extract_player_info_from_dict(team_trades[main_team][0]),
         "dropped_player": {
             "player_id": None,
             "position": "",
@@ -413,29 +445,64 @@ def _process_single_activity(act: Any, since_utc: datetime) -> list[dict[str, An
             "player": formatted_action,
             "bid": item["bid"],
             "action_type": "Combined",
-            "added_player": {
-                "player_id": item.get("player_id") if not is_drop else None,
-                "position": item.get("position", "") if not is_drop else "",
-                "pro_team": item.get("pro_team", "") if not is_drop else "",
-                "name": item.get("player", "").replace("<strong>", "").replace("</strong>", "") if not is_drop else ""
+            "added_player": _extract_player_info_from_dict(item) if not is_drop else {
+                "player_id": None,
+                "position": "",
+                "pro_team": "",
+                "name": ""
             },
-            "dropped_player": {
-                "player_id": item.get("player_id") if is_drop else None,
-                "position": item.get("position", "") if is_drop else "",
-                "pro_team": item.get("pro_team", "") if is_drop else "",
-                "name": item.get("player", "").replace("<strong>", "").replace("</strong>", "") if is_drop else ""
+            "dropped_player": _extract_player_info_from_dict(item) if is_drop else {
+                "player_id": None,
+                "position": "",
+                "pro_team": "",
+                "name": ""
             }
         }
         combined_items.append(combined_item)
     return combined_items
 
 
+def _fetch_activity_with_retry(league: League, max_retries: int = 3, delay: float = 1.0) -> list[Any]:
+    """Fetch league activity with retry logic for robustness.
+    
+    Args:
+        league: League instance
+        max_retries: Maximum number of retry attempts
+        delay: Delay between retries in seconds
+        
+    Returns:
+        List of raw activity data
+        
+    Raises:
+        RuntimeError: If all retry attempts fail
+    """
+    last_error = None
+    
+    for attempt in range(max_retries + 1):
+        try:
+            raw_activity = league.recent_activity(size=300)
+            return raw_activity
+        except Exception as e:
+            last_error = e
+            if attempt < max_retries:
+                print(f"API call failed (attempt {attempt + 1}/{max_retries + 1}): {e}")
+                time.sleep(delay * (2 ** attempt))  # Exponential backoff
+            else:
+                print(f"All API retry attempts failed. Last error: {e}")
+    
+    raise RuntimeError(f"Failed to fetch activity after {max_retries + 1} attempts: {last_error}")
+
 def get_activity_since(league: League, since_utc: datetime) -> dict[str, list[dict[str, Any]]]:
     """Fetch and process league activity since the given UTC datetime."""
     grouped: defaultdict[str, list[dict[str, Any]]] = defaultdict(list)
 
-    # Fetch recent activity (optionally dump raw output when DEBUG is set truthy)
-    raw_activity = league.recent_activity(size=300)
+    # Fetch recent activity with retry logic
+    try:
+        raw_activity = _fetch_activity_with_retry(league)
+    except RuntimeError as e:
+        print(f"Error fetching activity: {e}")
+        return grouped
+    
     if debug():
         _debug_dump_activity(raw_activity)
 
@@ -444,8 +511,12 @@ def get_activity_since(league: League, since_utc: datetime) -> dict[str, list[di
         if combined_items := _process_single_activity(act, since_utc):
             grouped["Combined"].extend(combined_items)
 
+    def _get_sort_key(item: dict[str, Any]) -> tuple[datetime, int, str, str]:
+        """Get sort key for activity items to avoid repeated lookups."""
+        return (item["when_utc"], -item.get("bid", 0), item["team"], item["player"])
+    
     for cat in grouped:
-        grouped[cat].sort(key=lambda d: (d["when_utc"], -d.get("bid", 0), d["team"], d["player"]))
+        grouped[cat].sort(key=_get_sort_key)
     return grouped
 
 
@@ -485,11 +556,10 @@ def main():
     lg = league_handle()
     grouped = get_activity_since(lg, since_utc)
 
-    grouped_for_email = {}
-    for cat, items in grouped.items():
-        grouped_for_email[cat] = [
-            {**i, "when_local": fmt_local(i["when_utc"])} for i in items
-        ]
+    grouped_for_email = {
+        cat: [{**i, "when_local": fmt_local(i["when_utc"])} for i in items]
+        for cat, items in grouped.items()
+    }
 
     central_now = datetime.now().astimezone(CENTRAL_TIME)
     window_desc = (f"(last {lookback_hours}h ending "
