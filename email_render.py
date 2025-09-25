@@ -129,22 +129,18 @@ def render_email_html(grouped: dict[str, list[dict[str, Any]]],
     """
     styles = _get_email_styles()
 
-    def render_dropped_players_table(items):
-        """Render a simple list showing only dropped player names with enhanced styling."""
+    def render_dropped_players_by_position(items):
+        """Render dropped players grouped by position with enhanced styling."""
         if not items:
             return ""
 
-        output = StringIO()
-        output.write(f'<h3 style="{styles["h3"]}">Dropped Players')
-        output.write(f'  <span style="{styles["pill"]}">{len(items)}</span></h3>')
-        output.write(f'<div style="{styles["card"]}"><table role="presentation" ')
-        output.write(f'style="{styles["tbl"]}" cellpadding="0" cellspacing="0">')
-        output.write(f'<tbody>')
-
+        # Group dropped players by position
+        position_groups = {}
         for i in items:
             # Extract dropped player information from the new data structure
             dropped_player_info = i.get('dropped_player', {})
             dropped_player_name = dropped_player_info.get('name', '')
+            dropped_player_position = dropped_player_info.get('position', '')
             dropped_player_id = dropped_player_info.get('player_id')
 
             # If no dropped player info in new structure, fall back to parsing action text
@@ -162,14 +158,77 @@ def render_email_html(grouped: dict[str, list[dict[str, Any]]],
                 else:
                     dropped_player_name = action_text
 
-            # Get team abbreviation for D/ST teams
-            team_abbrev = dropped_player_info.get('pro_team', '')
+            # If we still don't have position info, try to extract from the formatted player name
+            if not dropped_player_position and dropped_player_name:
+                # Check if the player name contains position info in parentheses
+                import re
+                match = re.search(r'\(([^)]+)\)', dropped_player_name)
+                if match:
+                    position_info = match.group(1)
+                    # Extract position from the first part before comma
+                    dropped_player_position = position_info.split(',')[0].strip()
 
-            # Format player with headshot
-            player_html = format_player_with_headshot(dropped_player_name, dropped_player_id, team_abbrev)
-            output.write(f'<tr><td style="{styles["td"]}">{player_html}</td></tr>')
+            # Use 'Unknown' as fallback position
+            if not dropped_player_position:
+                dropped_player_position = 'Unknown'
 
-        output.write(f'</tbody></table></div>')
+            # Add to position group
+            if dropped_player_position not in position_groups:
+                position_groups[dropped_player_position] = []
+            
+            position_groups[dropped_player_position].append({
+                'name': dropped_player_name,
+                'id': dropped_player_id,
+                'pro_team': dropped_player_info.get('pro_team', ''),
+                'item': i
+            })
+
+        # Define the preferred order for positions
+        position_order = ['QB', 'RB', 'WR', 'TE', 'D/ST', 'K']
+        
+        # Render tables for each position in the specified order
+        output = StringIO()
+        for position in position_order:
+            if position in position_groups:
+                players = position_groups[position]
+                output.write(f'<h3 style="{styles["h3"]}">Dropped {position}s')
+                output.write(f'  <span style="{styles["pill"]}">{len(players)}</span></h3>')
+                output.write(f'<div style="{styles["card"]}"><table role="presentation" ')
+                output.write(f'style="{styles["tbl"]}" cellpadding="0" cellspacing="0">')
+                output.write(f'<tbody>')
+
+                for player_data in players:
+                    # Format player with headshot
+                    player_html = format_player_with_headshot(
+                        player_data['name'], 
+                        player_data['id'], 
+                        player_data['pro_team']
+                    )
+                    output.write(f'<tr><td style="{styles["td"]}">{player_html}</td></tr>')
+
+                output.write(f'</tbody></table></div>')
+        
+        # Handle any positions not in the preferred order (fallback for future positions)
+        for position in sorted(position_groups.keys()):
+            if position not in position_order:
+                players = position_groups[position]
+                output.write(f'<h3 style="{styles["h3"]}">Dropped {position}s')
+                output.write(f'  <span style="{styles["pill"]}">{len(players)}</span></h3>')
+                output.write(f'<div style="{styles["card"]}"><table role="presentation" ')
+                output.write(f'style="{styles["tbl"]}" cellpadding="0" cellspacing="0">')
+                output.write(f'<tbody>')
+
+                for player_data in players:
+                    # Format player with headshot
+                    player_html = format_player_with_headshot(
+                        player_data['name'], 
+                        player_data['id'], 
+                        player_data['pro_team']
+                    )
+                    output.write(f'<tr><td style="{styles["td"]}">{player_html}</td></tr>')
+
+                output.write(f'</tbody></table></div>')
+
         return output.getvalue()
 
     def render_all_activity_table(items):
@@ -211,9 +270,9 @@ def render_email_html(grouped: dict[str, list[dict[str, Any]]],
     output.write(f'<h1 style="{styles["h1"]}">Digest for {league_title}</h1>')
     output.write(f'<h2 style="{styles["h2"]}">{window_desc}</h2>')
 
-    # Add Players Dropped table if there are any
+    # Add Players Dropped tables grouped by position if there are any
     if dropped_players:
-        output.write(render_dropped_players_table(dropped_players))
+        output.write(render_dropped_players_by_position(dropped_players))
 
     # Add All Activity table
     if not all_actions:
