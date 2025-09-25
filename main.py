@@ -331,19 +331,20 @@ def _process_add_drop_combinations(adds: list[dict[str, Any]],
     return combined_items
 
 
-def _process_trades(trades: list[dict[str, Any]], ts_utc: datetime) -> dict[str, Any]:
-    """Process trade actions and return combined trade item.
+def _process_trades(trades: list[dict[str, Any]], ts_utc: datetime) -> list[dict[str, Any]]:
+    """Process trade actions and return combined trade items for each team.
 
     Args:
         trades: List of trade actions
         ts_utc: UTC timestamp for the activity
 
     Returns:
-        Combined trade item
+        List of combined trade items, one for each team involved
     """
     if len(trades) == 1:
+        # Single trade action - create one entry
         trade = trades[0]
-        return {
+        return [{
             "when_utc": ts_utc,
             "team": trade["team"],
             "player": f"Traded <strong>{trade['player']}</strong>",
@@ -356,50 +357,63 @@ def _process_trades(trades: list[dict[str, Any]], ts_utc: datetime) -> dict[str,
                 "pro_team": "",
                 "name": ""
             }
-        }
+        }]
 
-    # Group trades by team to understand who is giving up what and receiving what
+    # Group trades by team - ESPN only supports two-team trades
     team_trades = defaultdict(list)
     for trade in trades:
         team_trades[trade["team"]].append(trade)
 
-    # For multi-team trades, we need to determine the main team and what they traded for
-    # The team with the most trade actions is typically the "main" team in the transaction
-    main_team = max(team_trades.keys(), key=lambda t: len(team_trades[t]))
-    other_teams = [team for team in team_trades.keys() if team != main_team]
-
-    # Get players from main team (what they're giving up)
-    main_team_players = [f"<strong>{t['player']}</strong>" for t in team_trades[main_team]]
-
-    # Get players from other teams (what they're receiving)
-    received_players = []
-    for team in other_teams:
-        received_players.extend([f"<strong>{t['player']}</strong>" for t in team_trades[team]])
-
-    # Format the trade text
-    if len(main_team_players) == 1 and len(received_players) == 1:
-        trade_text = f"Traded {main_team_players[0]} for {received_players[0]}"
-    elif len(main_team_players) == 1:
-        trade_text = f"Traded {main_team_players[0]} for {', '.join(received_players)}"
-    elif len(received_players) == 1:
-        trade_text = f"Traded {', '.join(main_team_players)} for {received_players[0]}"
+    # Get the two teams involved
+    teams = list(team_trades.keys())
+    if len(teams) != 2:
+        # Fallback for unexpected multi-team scenario
+        team1, team2 = teams[0], teams[1]
     else:
-        trade_text = f"Traded {', '.join(main_team_players)} for {', '.join(received_players)}"
+        team1, team2 = teams
 
-    return {
+    # Get players for each team
+    team1_players = [f"<strong>{t['player']}</strong>" for t in team_trades[team1]]
+    team2_players = [f"<strong>{t['player']}</strong>" for t in team_trades[team2]]
+
+    # Create trade entries for both teams
+    trade_items = []
+
+    # Team 1 entry (what they gave up for what they received)
+    team1_trade_text = f"Traded {', '.join(team1_players)} for {', '.join(team2_players)}"
+    trade_items.append({
         "when_utc": ts_utc,
-        "team": main_team,
-        "player": trade_text,
+        "team": team1,
+        "player": team1_trade_text,
         "bid": max(t["bid"] for t in trades),
         "action_type": "Combined",
-        "added_player": _extract_player_info_from_dict(team_trades[main_team][0]),
+        "added_player": _extract_player_info_from_dict(team_trades[team1][0]),
         "dropped_player": {
             "player_id": None,
             "position": "",
             "pro_team": "",
             "name": ""
         }
-    }
+    })
+
+    # Team 2 entry (what they gave up for what they received)
+    team2_trade_text = f"Traded {', '.join(team2_players)} for {', '.join(team1_players)}"
+    trade_items.append({
+        "when_utc": ts_utc,
+        "team": team2,
+        "player": team2_trade_text,
+        "bid": max(t["bid"] for t in trades),
+        "action_type": "Combined",
+        "added_player": _extract_player_info_from_dict(team_trades[team2][0]),
+        "dropped_player": {
+            "player_id": None,
+            "position": "",
+            "pro_team": "",
+            "name": ""
+        }
+    })
+
+    return trade_items
 
 
 def _process_single_activity(act: Any, since_utc: datetime) -> list[dict[str, Any]]:
@@ -431,7 +445,7 @@ def _process_single_activity(act: Any, since_utc: datetime) -> list[dict[str, An
     if adds and drops:
         return _process_add_drop_combinations(adds, drops, ts_utc)
     if trades:
-        return [_process_trades(trades, ts_utc)]
+        return _process_trades(trades, ts_utc)
 
     # Handle individual actions
     combined_items = []
