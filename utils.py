@@ -52,10 +52,55 @@ def strip_html_tags(text: str) -> str:
 
 
 def fmt_team(team_obj: Any) -> str:
-    """Format team object to string, trying team_name, team_abbrev, then str()."""
-    return (getattr(team_obj, "team_name", None) or
-            getattr(team_obj, "team_abbrev", None) or
-            str(team_obj))
+    """Format team object to string with manager name in parentheses."""
+    # Get the base team name
+    team_name = (getattr(team_obj, "team_name", None) or
+                 getattr(team_obj, "team_abbrev", None) or
+                 str(team_obj))
+    
+    # Try to get the first manager's name
+    manager_name = get_team_manager_name(team_obj)
+    
+    # Add manager name in brackets and italicized on a new line if available
+    if manager_name and manager_name != "Unknown Manager":
+        return f"{team_name}<br><i>[{manager_name}]</i>"
+    
+    return team_name
+
+
+def get_team_manager_name(team_obj: Any) -> str:
+    """Get all team manager names, deduplicated.
+    
+    Args:
+        team_obj: Team object from ESPN API
+        
+    Returns:
+        Comma-separated list of all unique manager names, or "Unknown Manager" if not available
+    """
+    if hasattr(team_obj, 'owners') and team_obj.owners:
+        manager_names = []
+        
+        for owner in team_obj.owners:
+            first_name = owner.get('firstName', '')
+            last_name = owner.get('lastName', '')
+            
+            if first_name and last_name:
+                full_name = f"{first_name} {last_name}"
+            elif first_name:
+                full_name = first_name
+            elif last_name:
+                full_name = last_name
+            else:
+                # Fallback to display name if first/last names aren't available
+                full_name = owner.get('displayName', '')
+            
+            if full_name and full_name not in manager_names:
+                manager_names.append(full_name)
+        
+        if manager_names:
+            return ", ".join(manager_names)
+    
+    return "Unknown Manager"
 
 
 def fmt_player(player_obj: Any) -> str:
